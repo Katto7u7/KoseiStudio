@@ -1,0 +1,38 @@
+# Dependencias y builds
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Salidas locales del backend en desarrollo
+backend/out/
+backend/outTxt/
+backend/runs/
+
+# Modelos y datos: pesados, se copian segun volumes/README.md
+volumes/*
+!volumes/README.md
+
+# Punto de montaje local, los scripts viven en ../EntrenamientoLora
+EntrenamientoLora/
+
+# Pesos y artefactos
+*.ckpt
+*.safetensors
+*.pt
+*.pth
+
+# Experimentos: los datos no se versionan, los resultados finales si
+experiments/data/
+experiments/runs/
+
+# Sistema y secretos
+.env
+.env.*
+Thumbs.db
+.DS_Store

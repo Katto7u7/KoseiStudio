@@ -1,0 +1,9 @@
+.venv
+__pycache__
+*.pyc
+*.pyo
+out/
+outTxt/
+runs/
+lora/
+yolo/

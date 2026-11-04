@@ -1,0 +1,75 @@
+services:
+
+  sd-webui:
+    build:
+      context: ./docker/sd-webui
+      dockerfile: Dockerfile
+    ports:
+      - "7860:7860"          # opcional: acceso directo a la UI de Forge
+    volumes:
+      - ./volumes/models:/models          # checkpoints + LoRA (read-only en runtime)
+      - ./volumes/output/sd:/webui/outputs
+      - sd-webui-cache:/root/.cache       # pip/HF cache entre reinicios
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:7860/sdapi/v1/sd-models || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 180s   # Forge tarda ~2 min en cargar el primer modelo
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      SD_HOST: sd-webui
+      SD_PORT: "7860"
+      LORA_DIR: /models/Lora
+      AUTO_MODELS_DIR: /yolo
+      OUTPUT_DIR: /output/images
+      OUTPUT_TXT_DIR: /output/metadata
+      FRONTEND_ORIGINS: "http://localhost,http://127.0.0.1"
+      ENABLE_ADETAILER: "0"
+      KOHYA_DIR: /kohya_ss/sd-scripts
+      TRAIN_DATA_DIR: /training
+    volumes:
+      - ./volumes/models/Lora:/models/Lora
+      - ./volumes/yolo:/yolo:ro
+      - ./volumes/output/images:/output/images
+      - ./volumes/output/metadata:/output/metadata
+      - ./EntrenamientoLora/kohya_ss/sd-scripts:/kohya_ss/sd-scripts:ro
+      - ./volumes/training:/training
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    depends_on:
+      sd-webui:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  sd-webui-cache:
