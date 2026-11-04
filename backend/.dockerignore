@@ -1,9 +1,8 @@
 .venv
 __pycache__
 *.pyc
-*.pyo
-out/
-outTxt/
-runs/
-lora/
-yolo/
+out
+outTxt
+runs
+tests/__pycache__
+.pytest_cache

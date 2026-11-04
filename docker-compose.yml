@@ -1,15 +1,49 @@
+# KoseiStudio: basta con `docker compose up -d`. Interfaz en http://localhost
+#
+# - Las imagenes llevan etiqueta explicita: Compose solo construye si la etiqueta
+#   no existe, asi el arranque funciona sin internet.
+# - Solo nginx se publica, y solo en esta maquina. El backend y Forge son internos.
+
+name: ui_v3_react
+
 services:
 
+  # Descarga lo que falte y termina. No sobrescribe nada de lo que ya existe.
+  model-init:
+    image: koseistudio-backend:1.0
+    build:
+      context: ./backend
+    command: ["python", "-m", "app.model_init"]
+    healthcheck:
+      disable: true
+    environment:
+      DOWNLOAD_FLUX: "1"
+    volumes:
+      - ./volumes/models:/models
+      - ./volumes/yolo:/yolo
+      - ./volumes/weights:/weights
+    restart: "no"
+
   sd-webui:
+    image: ui_v3_react-sd-webui:latest
     build:
       context: ./docker/sd-webui
-      dockerfile: Dockerfile
+    command:
+      - python3
+      - launch.py
+      - --api
+      - --api-server-stop
+      - --listen
+      - --port=7860
+      - --no-download-sd-model
+      - --ckpt-dir=/models/Stable-diffusion
+      - --lora-dir=/models/Lora
     ports:
-      - "7860:7860"          # opcional: acceso directo a la UI de Forge
+      - "127.0.0.1:7860:7860"   # solo diagnostico local
     volumes:
-      - ./volumes/models:/models          # checkpoints + LoRA (read-only en runtime)
+      - ./volumes/models:/models
       - ./volumes/output/sd:/webui/outputs
-      - sd-webui-cache:/root/.cache       # pip/HF cache entre reinicios
+      - sd-webui-cache:/root/.cache
     deploy:
       resources:
         reservations:
@@ -17,38 +51,39 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    depends_on:
+      model-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:7860/sdapi/v1/sd-models || exit 1"]
-      interval: 30s
+      interval: 15s
       timeout: 10s
-      retries: 15
-      start_period: 180s   # Forge tarda ~2 min en cargar el primer modelo
+      retries: 20
+      start_period: 180s
+    logging: &logging
+      driver: json-file
+      options: {max-size: "20m", max-file: "3"}
 
   backend:
+    image: koseistudio-backend:1.0
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
     environment:
-      SD_HOST: sd-webui
-      SD_PORT: "7860"
+      FORGE_URL: http://sd-webui:7860
+      DATA_DIR: /data
       LORA_DIR: /models/Lora
-      AUTO_MODELS_DIR: /yolo
-      OUTPUT_DIR: /output/images
-      OUTPUT_TXT_DIR: /output/metadata
-      FRONTEND_ORIGINS: "http://localhost,http://127.0.0.1"
-      ENABLE_ADETAILER: "0"
-      KOHYA_DIR: /kohya_ss/sd-scripts
-      TRAIN_DATA_DIR: /training
+      CHECKPOINT_DIR: /models/Stable-diffusion
+      YOLO_DIR: /yolo
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
     volumes:
+      - ./volumes/data:/data
       - ./volumes/models/Lora:/models/Lora
-      - ./volumes/yolo:/yolo:ro
-      - ./volumes/output/images:/output/images
-      - ./volumes/output/metadata:/output/metadata
-      - ./EntrenamientoLora/kohya_ss/sd-scripts:/kohya_ss/sd-scripts:ro
-      - ./volumes/training:/training
+      - ./volumes/models/Stable-diffusion:/models/Stable-diffusion:ro
+      - ./volumes/yolo:/yolo
+      - ./volumes/weights:/weights
+    shm_size: 4gb              # DataLoader de YOLO y kohya
     deploy:
       resources:
         reservations:
@@ -57,19 +92,28 @@ services:
               count: all
               capabilities: [gpu]
     depends_on:
-      sd-webui:
-        condition: service_healthy
+      model-init:
+        condition: service_completed_successfully
     restart: unless-stopped
+    stop_grace_period: 20s
+    logging: *logging
 
   frontend:
+    image: koseistudio-frontend:1.0
     build:
       context: .
-      dockerfile: Dockerfile
     ports:
-      - "80:80"
+      - "127.0.0.1:80:80"
     depends_on:
       - backend
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    logging: *logging
 
 volumes:
   sd-webui-cache:

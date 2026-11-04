@@ -19,9 +19,9 @@ RUN ln -sf /usr/bin/python3.10 /usr/bin/python3 \
 
 WORKDIR /webui
 
-# Clone Forge at a fixed commit for reproducibility
+# Forge fijado al commit verificado en la imagen en uso
 RUN git clone https://github.com/lllyasviel/stable-diffusion-webui-forge.git . \
-    && git checkout main
+    && git checkout dfdcbab685e57677014f05a3309b48cc87383167
 
 # PyTorch with CUDA 11.8 — install before requirements to avoid version conflicts
 RUN pip3 install --no-cache-dir \
