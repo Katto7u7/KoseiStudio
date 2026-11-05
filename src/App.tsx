@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
 import { BrowserRouter, Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
+import { ChevronRight, Cpu, FolderKanban, LayoutDashboard, Moon, Sun } from "lucide-react";
 import { Job, Project, SystemStatus, get, post } from "./lib/api";
 import { formatDuration, usePoll, useStored } from "./lib/hooks";
-import { STAGES, flowProgress } from "./ui/flow";
+import { STAGES, StageIcon, flowProgress } from "./ui/flow";
 import { Progress, ToastProvider, jobLabel, useAction } from "./ui/kit";
 import BuildPage from "./pages/BuildPage";
 import DatasetPage from "./pages/DatasetPage";
@@ -16,12 +17,33 @@ import ReviewPage from "./pages/ReviewPage";
 import SystemPage from "./pages/SystemPage";
 
 type Theme = "light" | "dark";
+export const SKINS = ["grafito", "porcelana", "medianoche"] as const;
+type Skin = (typeof SKINS)[number];
+const NATURAL_THEME: Record<Skin, Theme> = { grafito: "dark", porcelana: "light", medianoche: "dark" };
 
-function ThemeToggle() {
-  const [theme, setTheme] = useStored<Theme>("kosei_theme_v2", "light");
-  useEffect(() => { document.documentElement.setAttribute("data-theme", theme); }, [theme]);
-  const choose = (next: Theme, button: HTMLElement) => {
-    if (next === theme) return;
+/** Aspecto y tema. `?skin=` y `?theme=` permiten comparar aspectos durante la eleccion de diseno. */
+function useAppearance() {
+  const [skin, setSkin] = useStored<Skin>("kosei_skin", "grafito");
+  const [theme, setTheme] = useStored<Theme>("kosei_theme_v3", NATURAL_THEME[skin]);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const asked = params.get("skin") as Skin | null;
+    if (asked && SKINS.includes(asked)) {
+      setSkin(asked);
+      setTheme((params.get("theme") as Theme) || NATURAL_THEME[asked]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    document.documentElement.setAttribute("data-skin", skin);
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [skin, theme]);
+  return { skin, theme, setSkin, setTheme };
+}
+
+function ThemeButton({ theme, setTheme }: { theme: Theme; setTheme: (t: Theme) => void }) {
+  const next: Theme = theme === "dark" ? "light" : "dark";
+  const toggle = (button: HTMLElement) => {
     const apply = () => {
       document.documentElement.setAttribute("data-theme", next);
       setTheme(next);
@@ -34,21 +56,19 @@ function ThemeToggle() {
     else apply();
   };
   return (
-    <div className="theme-toggle" role="group" aria-label="Tema">
-      <button aria-pressed={theme === "light"} onClick={(e) => choose("light", e.currentTarget)}>Claro</button>
-      <button aria-pressed={theme === "dark"} onClick={(e) => choose("dark", e.currentTarget)}>Oscuro</button>
-    </div>
+    <button className="icon-btn" aria-label={`Cambiar a tema ${next === "dark" ? "oscuro" : "claro"}`} title={`Tema ${next === "dark" ? "oscuro" : "claro"}`} onClick={(e) => toggle(e.currentTarget)}>
+      {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+    </button>
   );
 }
 
-function Rail({ system, jobs }: { system: SystemStatus | null; jobs: Job[] }) {
+function Rail({ projects, system }: { projects: Project[] | null; system: SystemStatus | null }) {
   const location = useLocation();
   const navigate = useNavigate();
   const projectId = location.pathname.match(/^\/p\/([0-9a-f]{16})/)?.[1];
-  const { data: projects } = usePoll(() => get<Project[]>("/projects"), 5000, [location.pathname]);
   const project = projects?.find((p) => p.id === projectId);
   const reached = project ? flowProgress(project.pipeline) : 0;
-  const ready = system?.engine.ready;
+  const jobs = system?.active_jobs ?? [];
 
   return (
     <aside className="rail">
@@ -66,21 +86,23 @@ function Rail({ system, jobs }: { system: SystemStatus | null; jobs: Job[] }) {
         </div>
       )}
 
-      <nav className="rail-nav" aria-label="Etapas del proyecto">
-        {project && (
+      <nav className="rail-nav" aria-label="Navegación">
+        {project ? (
           <>
-            <NavLink end to={`/p/${project.id}`} className={({ isActive }) => `rail-link${isActive ? " active" : ""}`}>Resumen</NavLink>
+            <NavLink end to={`/p/${project.id}`} className={({ isActive }) => `rail-link${isActive ? " active" : ""}`}>
+              <LayoutDashboard size={16} /> Resumen
+            </NavLink>
             <div className="rail-title">Flujo de trabajo</div>
             <div className="flow">
               <span className="flow-track" aria-hidden />
-              <span className="flow-fill" aria-hidden style={{ height: reached > 1 ? `calc((100% - 36px) * ${(reached - 1) / (STAGES.length - 1)})` : 0 }} />
+              <span className="flow-fill" aria-hidden style={{ height: reached > 1 ? `calc((100% - 40px) * ${(reached - 1) / (STAGES.length - 1)})` : 0 }} />
               {STAGES.map((stage) => {
                 const running = jobs.some((j) => j.project_id === project.id && stage.kinds.includes(j.kind));
                 const count = stage.count?.(project.pipeline);
                 return (
                   <NavLink key={stage.path} to={`/p/${project.id}/${stage.path}`}
                     className={({ isActive }) => `stage${isActive ? " active" : ""}${stage.done(project.pipeline) ? " done" : ""}${running ? " running" : ""}`}>
-                    <span className="stage-dot" aria-hidden />
+                    <span className="stage-node" aria-hidden><StageIcon path={stage.path} /></span>
                     <span>{stage.label}</span>
                     {count ? <span className="stage-count">{count}</span> : <span />}
                   </NavLink>
@@ -88,17 +110,57 @@ function Rail({ system, jobs }: { system: SystemStatus | null; jobs: Job[] }) {
               })}
             </div>
           </>
+        ) : (
+          <NavLink end to="/" className={({ isActive }) => `rail-link${isActive ? " active" : ""}`}>
+            <FolderKanban size={16} /> Proyectos
+          </NavLink>
         )}
       </nav>
 
       <div className="rail-foot">
         <NavLink to="/system" className={({ isActive }) => `rail-link${isActive ? " active" : ""}`}>
-          <span>Sistema</span>
-          <span className="rail-status"><span className={`dot ${ready ? "dot-good" : "dot-warn"}`} aria-hidden />{ready ? "Motor listo" : "Motor cargando"}</span>
+          <Cpu size={16} /> <span className="grow">Sistema</span>
         </NavLink>
-        <ThemeToggle />
       </div>
     </aside>
+  );
+}
+
+const PAGE_LABEL: Record<string, string> = Object.fromEntries(STAGES.map((s) => [s.path, s.label]));
+
+function Topbar({ projects, system, theme, setTheme }: { projects: Project[] | null; system: SystemStatus | null; theme: Theme; setTheme: (t: Theme) => void }) {
+  const location = useLocation();
+  const match = location.pathname.match(/^\/p\/([0-9a-f]{16})(?:\/([a-z]+))?/);
+  const project = match ? projects?.find((p) => p.id === match[1]) : undefined;
+  const section = match?.[2];
+  const gpu = system?.gpu;
+  const ready = system?.engine.ready;
+  return (
+    <header className="topbar">
+      <nav className="crumbs" aria-label="Ruta">
+        <Link to="/">Proyectos</Link>
+        {location.pathname === "/system" && <><ChevronRight size={14} /><span className="here">Sistema</span></>}
+        {project && (
+          <>
+            <ChevronRight size={14} />
+            {section ? <Link to={`/p/${project.id}`}>{project.name}</Link> : <span className="here">{project.name}</span>}
+            {section && <><ChevronRight size={14} /><span className="here">{PAGE_LABEL[section] ?? section}</span></>}
+          </>
+        )}
+      </nav>
+      <div className="top-actions">
+        <Link to="/system" className="chip" title="Estado del motor de generación">
+          <span className={`dot ${ready ? "dot-good" : "dot-warn"}`} aria-hidden />
+          {ready ? "Motor listo" : "Motor cargando"}
+        </Link>
+        {gpu && (
+          <Link to="/system" className="chip" title={gpu.name}>
+            GPU <span className="mono">{(gpu.memory_used_mib / 1024).toFixed(1)}/{(gpu.memory_total_mib / 1024).toFixed(0)} GB</span>
+          </Link>
+        )}
+        <ThemeButton theme={theme} setTheme={setTheme} />
+      </div>
+    </header>
   );
 }
 
@@ -145,14 +207,17 @@ function JobDock({ jobs, onChange }: { jobs: Job[]; onChange: () => void }) {
 }
 
 function Shell() {
-  const { data: system, refresh } = usePoll(() => get<SystemStatus>("/system"), 2500);
+  const { theme, setTheme } = useAppearance();
   const location = useLocation();
+  const { data: system, refresh } = usePoll(() => get<SystemStatus>("/system"), 2500);
+  const { data: projects } = usePoll(() => get<Project[]>("/projects"), 5000, [location.pathname]);
   const jobs = useMemo(() => system?.active_jobs ?? [], [system]);
   useEffect(() => { document.querySelector(".main")?.scrollTo({ top: 0 }); }, [location.pathname]);
   return (
     <div className="shell">
-      <Rail system={system} jobs={jobs} />
+      <Rail projects={projects} system={system} />
       <div className="main">
+        <Topbar projects={projects} system={system} theme={theme} setTheme={setTheme} />
         {system && !system.engine.ready && (
           <div className="engine-banner">
             <span className="pill pill-warn">Motor cargando</span>

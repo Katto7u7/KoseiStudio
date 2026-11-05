@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { BrainCircuit, FlaskConical, Gauge, Images, PackageCheck, ScanSearch, Wand2 } from "lucide-react";
 import { ImageRow, Pipeline, get } from "../lib/api";
 import { usePoll } from "../lib/hooks";
 
@@ -25,6 +26,16 @@ export const STAGES: Stage[] = [
   { path: "experiment", label: "Experimento", kinds: ["experiment"], done: (p) => p.experiments_ready > 0, count: (p) => p.experiments_ready, value: (p) => (p.experiments_ready ? `${p.experiments_ready} completo${p.experiments_ready === 1 ? "" : "s"}` : "Sin correr") },
 ];
 
+const ICONS: Record<string, typeof Images> = {
+  dataset: Images, lora: BrainCircuit, generate: Wand2, review: ScanSearch,
+  quality: Gauge, build: PackageCheck, experiment: FlaskConical,
+};
+
+export function StageIcon({ path, size = 15 }: { path: string; size?: number }) {
+  const Icon = ICONS[path] ?? Images;
+  return <Icon size={size} strokeWidth={1.8} />;
+}
+
 /** Ultima etapa consecutiva completada. La linea del riel se llena hasta ahi. */
 export function flowProgress(p: Pipeline): number {
   let done = 0;
@@ -45,7 +56,7 @@ export function FlowMap({ pipeline, runningKinds }: { pipeline: Pipeline; runnin
         return (
           <Link key={stage.path} role="listitem" to={stage.path} className={`flow-node${done ? " done" : ""}${running ? " running" : ""}`}>
             <span className="flow-node-top">
-              <span className="flow-node-dot" aria-hidden>{done ? "✓" : i + 1}</span>
+              <span className="flow-node-dot" aria-hidden><StageIcon path={stage.path} size={17} /></span>
               <span className="flow-wire" aria-hidden />
             </span>
             <span className="flow-node-label">{stage.label}</span>
@@ -104,13 +115,13 @@ export function FlowIntro() {
         </g>
       ))}
       {/* Sujeto simplificado: el mismo en todas las etapas. */}
-      <g fill="#4FD1BE"><circle cx={54} cy={54} r={13} /><path d="M 30 96 a 24 22 0 0 1 48 0 z" /></g>
-      <g fill="none" stroke="#C9D3EA" strokeWidth={2}><circle cx={188} cy={66} r={22} /><path d="M 166 66 h 44 M 188 44 v 44" /></g>
-      <g fill="#F7A64D"><circle cx={322} cy={54} r={13} /><path d="M 298 96 a 24 22 0 0 1 48 0 z" /></g>
+      <g style={{ fill: "var(--real)" }}><circle cx={54} cy={54} r={13} /><path d="M 30 96 a 24 22 0 0 1 48 0 z" /></g>
+      <g fill="none" strokeWidth={2} style={{ stroke: "var(--mist)" }}><circle cx={188} cy={66} r={22} /><path d="M 166 66 h 44 M 188 44 v 44" /></g>
+      <g style={{ fill: "var(--synth)" }}><circle cx={322} cy={54} r={13} /><path d="M 298 96 a 24 22 0 0 1 48 0 z" /></g>
       <rect className="intro-box" x={291} y={34} width={62} height={68} rx={3} />
       <g>
         {[0, 1, 2].map((r) => [0, 1, 2].map((c) => (
-          <rect key={`${r}${c}`} x={424 + c * 22} y={36 + r * 22} width={18} height={18} rx={3} fill={(r + c) % 2 ? "#F7A64D" : "#4FD1BE"} />
+          <rect key={`${r}${c}`} x={424 + c * 22} y={36 + r * 22} width={18} height={18} rx={3} style={{ fill: (r + c) % 2 ? "var(--synth)" : "var(--real)" }} />
         )))}
       </g>
     </svg>

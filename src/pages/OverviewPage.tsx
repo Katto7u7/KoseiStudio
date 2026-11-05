@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
 import { Job, Project, del, get } from "../lib/api";
 import { formatDate, usePoll } from "../lib/hooks";
 import { FlowMap, Mosaic } from "../ui/flow";
@@ -37,30 +38,38 @@ export default function OverviewPage({ projectId, runningKinds }: { projectId: s
   const approvedSynth = pl.by_status.synthetic.approved ?? 0;
   const approvedReal = pl.by_status.real.approved ?? 0;
   const total = pl.real_images + approvedSynth;
+  const pendingAll = (pl.by_status.real.candidate ?? 0) + (pl.by_status.real.needs_review ?? 0) + (pl.by_status.synthetic.candidate ?? 0) + (pl.by_status.synthetic.needs_review ?? 0);
 
   return (
     <>
       <section className="hero">
-        <div className="stack" style={{ alignContent: "space-between" }}>
+        <div className="stack" style={{ gap: 20 }}>
           <div>
-            <h1>{project.name}</h1>
+            <div className="hero-eyebrow">Proyecto</div>
+            <h1 style={{ marginTop: 2 }}>{project.name}</h1>
             {project.description && <p className="page-sub">{project.description}</p>}
+          </div>
+          <div className="kpis">
+            <div className="kpi"><div className="kpi-value"><CountUp value={pl.real_images} /></div><div className="kpi-label"><i style={{ background: "var(--real-fill)" }} />Reales</div></div>
+            <div className="kpi"><div className="kpi-value"><CountUp value={pl.synthetic_images} /></div><div className="kpi-label"><i style={{ background: "var(--synth-fill)" }} />Generadas</div></div>
+            <div className="kpi"><div className="kpi-value"><CountUp value={approvedReal + approvedSynth} /></div><div className="kpi-label">Aprobadas</div></div>
+            <div className="kpi"><div className="kpi-value"><CountUp value={pendingAll} /></div><div className="kpi-label">Por revisar</div></div>
           </div>
           <div className="stack-sm">
             <div className="hero-title">
               {approvedSynth > 0
                 ? <>Tu dataset creció de {pl.real_images} a <CountUp value={total} /> imágenes</>
-                : pl.real_images > 0 ? <>Tu dataset tiene <CountUp value={pl.real_images} /> imágenes reales</> : "Tu dataset aún está vacío"}
+                : pl.real_images > 0 ? "Aún no hay sintéticas aprobadas en tu dataset" : "Tu dataset aún está vacío"}
             </div>
             {pl.real_images > 0 && (
               <>
-                <div className="mix" style={{ height: 12 }} role="img" aria-label={`${pl.real_images} reales y ${approvedSynth} sintéticas aprobadas`}>
+                <div className="mix" style={{ height: 10 }} role="img" aria-label={`${pl.real_images} reales y ${approvedSynth} sintéticas aprobadas`}>
                   <i style={{ width: `${(pl.real_images / Math.max(total, 1)) * 100}%`, background: "var(--real-fill)" }} />
                   {approvedSynth > 0 && <i style={{ width: `${(approvedSynth / total) * 100}%`, background: "var(--synth-fill)" }} />}
                 </div>
                 <div className="legend">
                   <span><i style={{ background: "var(--real-fill)" }} />{pl.real_images} reales</span>
-                  <span><i style={{ background: "var(--synth-fill)" }} />{approvedSynth} sintéticas aprobadas{pl.synthetic_images > approvedSynth ? `, de ${pl.synthetic_images} generadas` : ""}</span>
+                  <span><i style={{ background: "var(--synth-fill)" }} />{approvedSynth} sintéticas aprobadas</span>
                 </div>
               </>
             )}
@@ -76,7 +85,7 @@ export default function OverviewPage({ projectId, runningKinds }: { projectId: s
             <strong>{next.title}</strong>
             <div className="eyebrow" style={{ marginTop: 2 }}>{next.why}</div>
           </div>
-          <Link className="btn btn-primary btn-large" to={next.to}>{next.action}</Link>
+          <Link className="btn btn-primary btn-large" to={next.to}>{next.action} <ArrowRight size={16} /></Link>
         </div>
       ) : (
         <div style={{ marginBottom: 16 }}><Notice kind="good" title="Flujo completo">Todas las etapas tienen resultados. Puedes generar más imágenes o repetir el experimento.</Notice></div>
@@ -87,21 +96,13 @@ export default function OverviewPage({ projectId, runningKinds }: { projectId: s
           <FlowMap pipeline={pl} runningKinds={runningKinds} />
         </Card>
 
-        <div className="grid grid-2">
-          <Card title="Verificación" note="Imágenes aprobadas por una persona.">
-            <div className="stat-row">
-              <Stat value={approvedReal} label={`de ${pl.real_images} reales`} />
-              <Stat value={approvedSynth} label={`de ${pl.synthetic_images} sintéticas`} />
-            </div>
-          </Card>
-          <Card title="Partición" note={pl.split_locked ? `Bloqueada. Huella ${project.split_hash?.slice(0, 12)}` : "Aún sin bloquear"}>
-            <div className="stat-row">
-              <Stat value={pl.by_split.train} label="Entrenamiento" />
-              <Stat value={pl.by_split.val} label="Validación" />
-              <Stat value={pl.by_split.test} label="Prueba" />
-            </div>
-          </Card>
-        </div>
+        <Card title="Partición" note={pl.split_locked ? `Bloqueada. Huella ${project.split_hash?.slice(0, 12)}` : "Aún sin bloquear"}>
+          <div className="stat-row">
+            <Stat value={pl.by_split.train} label="Entrenamiento" />
+            <Stat value={pl.by_split.val} label="Validación" />
+            <Stat value={pl.by_split.test} label="Prueba" />
+          </div>
+        </Card>
 
         <Card title="Actividad reciente">
           {jobs && jobs.length > 0 ? (
