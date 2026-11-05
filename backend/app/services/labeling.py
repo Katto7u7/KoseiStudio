@@ -15,7 +15,7 @@ import numpy as np
 
 from .. import config, db, jobs
 from ..jobs import JobContext, register
-from . import storage
+from . import fidelity, storage
 
 log = logging.getLogger("kosei.labeling")
 
@@ -173,6 +173,17 @@ def label_image(image: dict[str, Any], classes: list[dict[str, Any]]) -> str:
     if qc.get("near_duplicate_of"):
         status = "needs_review"
         reasons.append("casi duplicada de otra imagen")
+    if image["origin"] == "synthetic":
+        try:
+            scored = fidelity.score(image["project_id"], path)
+        except Exception as exc:
+            log.warning("No se pudo medir la fidelidad de %s: %s", image["id"], exc)
+            scored = None
+        if scored:
+            qc = {**qc, "fidelity": scored}
+            if image["lora_id"] and scored.get("same_person") is False:
+                status = "needs_review"
+                reasons.append(f"el rostro no coincide con el sujeto ({scored['face']:.2f})")
     with db.transaction():
         db.execute("DELETE FROM annotations WHERE image_id=? AND verified=0", [image["id"]])
         for box, polygon in zip(boxes, polygons):

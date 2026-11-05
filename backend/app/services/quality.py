@@ -14,6 +14,7 @@ from PIL import Image
 from .. import db
 from ..jobs import JobContext, register
 from . import features, imaging, storage
+from . import fidelity as fidelity_mod
 
 log = logging.getLogger("kosei.quality")
 
@@ -161,7 +162,17 @@ def run_quality(ctx: JobContext) -> dict[str, Any]:
         [project_id],
     )
 
+    scored = [(s["qc"] or {}).get("fidelity") for s in synth if (s["qc"] or {}).get("fidelity")]
+    ref = fidelity_mod.reference(project_id)
+    fidelity_report = {
+        **fidelity_mod.summarize(scored),
+        "threshold": fidelity_mod.SAME_PERSON_THRESHOLD,
+        "real_baseline": ref["baseline_face"] if ref else None,
+        "train_faces": ref["train_faces"] if ref else 0,
+    }
+
     report = {
+        "fidelity": fidelity_report,
         "samples": {"real_train": len(real), "synthetic": len(synth)},
         "inception": scores,
         "precision_recall": improved_precision_recall(real_v, synth_v),

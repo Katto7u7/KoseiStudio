@@ -26,11 +26,6 @@
     "noUnusedParameters": false
   },
   "include": [
-    "src/App.tsx",
-    "src/main.tsx",
-    "src/lib",
-    "src/ui",
-    "src/pages",
-    "src/test"
+    "src"
   ]
 }

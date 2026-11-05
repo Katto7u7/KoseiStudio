@@ -131,6 +131,21 @@ def txt2img(payload: dict[str, Any]) -> tuple[list[Image.Image], dict[str, Any]]
     return images, info
 
 
+def img2img(payload: dict[str, Any], init: Image.Image) -> Image.Image:
+    buf = io.BytesIO()
+    init.convert("RGB").save(buf, "PNG")
+    body = {
+        "init_images": [base64.b64encode(buf.getvalue()).decode()],
+        "save_images": False, "send_images": True,
+        "do_not_save_samples": True, "do_not_save_grid": True,
+        **payload,
+    }
+    data = _post("/sdapi/v1/img2img", body, timeout=config.FORGE_TIMEOUT)
+    image = Image.open(io.BytesIO(base64.b64decode(data["images"][0].split(",", 1)[-1])))
+    image.load()
+    return image
+
+
 def interrupt() -> None:
     _post("/sdapi/v1/interrupt", timeout=10)
 

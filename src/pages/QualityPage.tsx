@@ -43,6 +43,18 @@ export default function QualityPage({ projectId }: { projectId: string }) {
             <span className="faint">{formatDate(latest!.created_at)}</span>
           </div>
           {r.warnings.map((w: string) => <Notice key={w} kind="warn">{w}</Notice>)}
+          {r.fidelity?.images > 0 && (
+            <Card title="Fidelidad al sujeto" note="Identidad facial con SFace y parecido visual con CLIP, contra las imágenes reales de train.">
+              <div className="stat-row">
+                <Stat value={r.fidelity.same_person_rate != null ? `${(r.fidelity.same_person_rate * 100).toFixed(0)} %` : "—"} label={`Reconocidas como el sujeto (rostro ≥ ${r.fidelity.threshold})`} />
+                <Stat value={r.fidelity.face_mean ?? "—"} label="Parecido facial medio" />
+                <Stat value={r.fidelity.real_baseline ?? "—"} label="Referencia: entre fotos reales" />
+                <Stat value={r.fidelity.clip_mean ?? "—"} label="Parecido visual medio (CLIP)" />
+                <Stat value={`${r.fidelity.face_found} / ${r.fidelity.images}`} label="Con rostro detectado" />
+              </div>
+              <p className="faint" style={{ marginTop: 10 }}>Límite: el umbral se calibró con una muestra pequeña, y el parecido facial no aplica a objetos. Para objetos usa CLIP junto con la inspección visual.</p>
+            </Card>
+          )}
           <div className="grid grid-3">
             <Metric name="FID" value={r.inception.fid} meaning="Distancia entre las distribuciones de características Inception de reales y sintéticas. Menor es más parecido."
               limit="muy sesgado con menos de 2048 muestras; útil solo para comparar corridas de igual tamaño." />

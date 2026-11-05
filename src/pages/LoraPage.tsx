@@ -204,9 +204,63 @@ function TrainingDetail({ lora }: { lora: Lora }) {
           <h3 style={{ marginBottom: 6 }}>Pérdida media</h3>
           <LossChart points={losses ?? []} />
         </div>
+        {lora.status === "ready" && lora.origin === "trained" && <FidelityPanel lora={lora} />}
         {log && <details className="advanced"><summary>Registro</summary><pre className="mono faint pre" style={{ margin: 0, fontSize: 11 }}>{log}</pre></details>}
         {job.result?.checkpoints?.length > 0 && <p className="faint">Puntos de control guardados: {job.result.checkpoints.join(", ")}</p>}
       </div>
     </Card>
+  );
+}
+
+function FidelityPanel({ lora }: { lora: Lora }) {
+  const { data: models } = usePoll(() => get<EngineModel[]>("/engine/models"), null);
+  const [subject, setSubject] = useState("man");
+  const [jobId, setJobId] = useState<string | null>(null);
+  const { data: job } = usePoll(() => (jobId ? get<Job>(`/jobs/${jobId}`) : Promise.resolve(null)), jobId ? 2500 : null, [jobId]);
+  const running = job?.status === "queued" || job?.status === "running";
+  const { data: evaluation, refresh } = usePoll(() => get<any>(`/loras/${lora.id}/evaluation`), running ? 5000 : null, [lora.id, running]);
+  const { busy, run } = useAction();
+  const base = models?.find((m) => m.title.split(" [")[0] === lora.base_model);
+  const checkpoints: any[] = evaluation?.checkpoints ?? [];
+  const best = checkpoints.reduce((a, c) => ((c.face_mean ?? c.clip_mean ?? -1) > (a?.face_mean ?? a?.clip_mean ?? -1) ? c : a), null as any);
+  return (
+    <div className="stack" style={{ borderTop: "1px solid var(--line)", paddingTop: 14 }}>
+      <div>
+        <h3>Fidelidad por punto de control</h3>
+        <p className="faint">Genera las mismas escenas con cada punto de control y mide cuánto se parecen al sujeto real. Un LoRA sobreentrenado puede empeorar al final.</p>
+      </div>
+      <div className="row" style={{ alignItems: "flex-end" }}>
+        <Field label="Palabra de la clase"><input value={subject} onChange={(e) => setSubject(e.target.value)} style={{ width: 140 }} /></Field>
+        <button className="btn" disabled={busy || running || !base} onClick={async () => {
+          const res = await run(() => post<{ job_id: string }>(`/loras/${lora.id}/evaluate`, { checkpoint: base!.title, subject }), "Medición en cola");
+          if (res) setJobId(res.job_id);
+        }}>{running ? "Midiendo..." : "Medir fidelidad"}</button>
+      </div>
+      {job?.error && <Notice kind="bad">{job.error}</Notice>}
+      {checkpoints.length > 0 && (
+        <div className="stack">
+          {evaluation.real_baseline != null && <p className="faint">Referencia: entre fotos reales del sujeto el parecido facial es {evaluation.real_baseline}. El umbral de misma persona es {evaluation.threshold}.</p>}
+          {checkpoints.map((c) => (
+            <div key={c.file} style={{ display: "grid", gap: 8 }}>
+              <div className="row-between">
+                <div className="row">
+                  <strong className="mono">{c.is_final ? "Final" : `Paso ${c.step}`}</strong>
+                  {best?.file === c.file && <span className="pill pill-good">Mayor parecido</span>}
+                  <span className="muted">Rostro {c.face_mean ?? "—"}, misma persona {c.same_person_rate != null ? `${Math.round(c.same_person_rate * 100)} %` : "—"}, CLIP {c.clip_mean ?? "—"}</span>
+                </div>
+                {!c.is_final && <button className="btn btn-small" disabled={busy} onClick={() => run(() => post(`/loras/${lora.id}/promote`, { file: c.file }), "Punto de control publicado como LoRA").then(refresh)}>Usar este</button>}
+              </div>
+              <div className="gallery" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(92px, 1fr))", gap: 6 }}>
+                {c.shots.map((shot: any) => (
+                  <a key={shot.file} href={`/api/loras/${lora.id}/evaluation/${c.file.replace(".safetensors", "")}/${shot.file}`} target="_blank" rel="noreferrer" title={`Rostro ${shot.face ?? "no detectado"}, CLIP ${shot.clip}`}>
+                    <img src={`/api/loras/${lora.id}/evaluation/${c.file.replace(".safetensors", "")}/${shot.file}`} alt={`Muestra de ${c.is_final ? "final" : `paso ${c.step}`}`} loading="lazy" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 3, display: "block" }} />
+                  </a>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

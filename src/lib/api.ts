@@ -190,6 +190,7 @@ export const JOB_LABEL: Record<string, string> = {
   quality: "Evaluación de calidad",
   build: "Construcción de dataset",
   experiment: "Experimento",
+  lora_eval: "Medición de fidelidad",
 };
 
 export const STATUS_LABEL: Record<string, string> = {

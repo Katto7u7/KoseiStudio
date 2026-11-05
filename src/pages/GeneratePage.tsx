@@ -37,6 +37,8 @@ export default function GeneratePage({ projectId }: { projectId: string }) {
   const [sampler, setSampler] = useState("DPM++ 2M");
   const [scheduler, setScheduler] = useState("karras");
   const [batch, setBatch] = useState(1);
+  const [refine, setRefine] = useStored(`kosei_refine_${projectId}`, true);
+  const [refineDenoise, setRefineDenoise] = useStored(`kosei_refine_d_${projectId}`, 0.4);
   const [selected, setSelected] = useState<ImageRow | null>(null);
   const { busy, run } = useAction();
 
@@ -67,7 +69,7 @@ export default function GeneratePage({ projectId }: { projectId: string }) {
     await post(`/projects/${projectId}/generate`, {
       checkpoint, lora_id: lora?.id ?? null, lora_weight: weight, class_id: classId, prompt, negative_prompt: negative,
       scenarios: Object.fromEntries(axes), count, seed, steps, cfg_scale: cfg, distilled_cfg_scale: distilled,
-      width, height, sampler, scheduler, batch_size: batch,
+      width, height, sampler, scheduler, batch_size: batch, refine, refine_denoise: refineDenoise,
     });
   }, "Generación en cola");
 
@@ -132,6 +134,15 @@ export default function GeneratePage({ projectId }: { projectId: string }) {
                 <Field label="Cantidad"><input type="number" min={1} max={5000} value={count} onChange={(e) => setCount(+e.target.value)} /></Field>
                 <Field label="Seed base" hint="-1 elige una al azar. Se guarda por imagen."><input type="number" min={-1} value={seed} onChange={(e) => setSeed(+e.target.value)} /></Field>
               </div>
+              <label className="row" style={{ fontSize: 13, alignItems: "flex-start", flexWrap: "nowrap" }}>
+                <input type="checkbox" checked={refine} onChange={(e) => setRefine(e.target.checked)} style={{ marginTop: 3 }} />
+                <span>Refinar el sujeto<br /><span className="field-hint">Regenera el rostro o el objeto a resolución completa cuando sale pequeño. Mejora el parecido y duplica el tiempo por imagen.</span></span>
+              </label>
+              {refine && (
+                <Field label={`Fuerza del refinado: ${refineDenoise.toFixed(2)}`}>
+                  <input type="range" min={0.15} max={0.7} step={0.05} value={refineDenoise} onChange={(e) => setRefineDenoise(+e.target.value)} />
+                </Field>
+              )}
               <details className="advanced">
                 <summary>Ajustes avanzados</summary>
                 <div className="fields">
@@ -211,6 +222,8 @@ function LivePreview({ job, selected }: { job?: Job; selected: ImageRow | null }
           <dt>Muestreo</dt><dd>{g.sampler} / {g.scheduler}, {g.steps} pasos</dd>
           <dt>Guía</dt><dd className="mono">{g.arch === "flux" ? g.distilled_cfg_scale : g.cfg_scale}</dd>
           <dt>Tamaño</dt><dd className="mono">{selected.width}×{selected.height}</dd>
+          <dt>Refinado</dt><dd>{g.refined_region ? `Sí, fuerza ${g.refine_denoise}` : "No"}</dd>
+          {selected.qc?.fidelity?.face != null && <><dt>Parecido</dt><dd className="mono">{selected.qc.fidelity.face.toFixed(2)}</dd></>}
           <dt>SHA-256</dt><dd className="mono">{selected.sha256.slice(0, 24)}…</dd>
         </dl>
       </div>

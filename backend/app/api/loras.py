@@ -1,10 +1,13 @@
 """Registro y entrenamiento de LoRAs."""
 from __future__ import annotations
 
+import json
+import re
 import shutil
 from typing import Optional
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .. import config, db, jobs
@@ -51,6 +54,59 @@ def lora_losses(lora_id: str):
     if not lora:
         raise HTTPException(404, "LoRA no encontrado")
     return training.read_losses(lora_id, lora["project_id"]) if lora["project_id"] else []
+
+
+class EvaluateIn(BaseModel):
+    checkpoint: str
+    subject: str = Field("person", max_length=60)
+    weight: float = Field(0.9, ge=0, le=2)
+    seeds: list[int] = Field(default_factory=lambda: [11, 22], max_length=6)
+
+
+@router.post("/loras/{lora_id}/evaluate", status_code=202)
+def evaluate_lora(lora_id: str, body: EvaluateIn):
+    lora = db.one("SELECT * FROM loras WHERE id=?", [lora_id])
+    if not lora or lora["origin"] != "trained" or lora["status"] != "ready" or not lora["project_id"]:
+        raise HTTPException(409, "Solo se evaluan LoRAs entrenados aqui y terminados")
+    return {"job_id": jobs.enqueue("lora_eval", lora["project_id"], {**body.model_dump(), "lora_id": lora_id})}
+
+
+@router.get("/loras/{lora_id}/evaluation")
+def lora_evaluation(lora_id: str):
+    lora = db.one("SELECT project_id FROM loras WHERE id=?", [lora_id])
+    if not lora or not lora["project_id"]:
+        raise HTTPException(404, "LoRA no encontrado")
+    path = storage.project_dir(lora["project_id"]) / "loras" / lora_id / "eval" / "result.json"
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return data if isinstance(data, dict) else {"checkpoints": data, "partial": True}
+
+
+@router.get("/loras/{lora_id}/evaluation/{stem}/{name}")
+def lora_evaluation_image(lora_id: str, stem: str, name: str):
+    lora = db.one("SELECT project_id FROM loras WHERE id=?", [lora_id])
+    if not lora or not lora["project_id"] or not re.fullmatch(r"[A-Za-z0-9_.-]+", stem) or not re.fullmatch(r"\d+_\d+\.png", name):
+        raise HTTPException(404, "Imagen no encontrada")
+    path = storage.project_dir(lora["project_id"]) / "loras" / lora_id / "eval" / stem / name
+    if not path.exists():
+        raise HTTPException(404, "Imagen no encontrada")
+    return FileResponse(path)
+
+
+class PromoteIn(BaseModel):
+    file: str
+
+
+@router.post("/loras/{lora_id}/promote", status_code=201)
+def promote_lora(lora_id: str, body: PromoteIn):
+    lora = db.one("SELECT * FROM loras WHERE id=?", [lora_id])
+    if not lora or not lora["project_id"]:
+        raise HTTPException(404, "LoRA no encontrado")
+    try:
+        return training.promote_checkpoint(lora, body.file)
+    except (FileNotFoundError, ValueError, FileExistsError) as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @router.delete("/loras/{lora_id}", status_code=204)

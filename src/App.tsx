@@ -18,7 +18,7 @@ interface Stage { path: string; label: string; kinds: string[]; done: (p: Pipeli
 
 export const STAGES: Stage[] = [
   { path: "dataset", label: "Dataset", kinds: ["ingest", "caption", "features"], done: (p) => p.split_locked, count: (p) => p.real_images },
-  { path: "lora", label: "LoRA", kinds: ["train_lora"], done: (p) => p.loras_ready > 0, count: (p) => p.loras_ready },
+  { path: "lora", label: "LoRA", kinds: ["train_lora", "lora_eval"], done: (p) => p.loras_ready > 0, count: (p) => p.loras_ready },
   { path: "generate", label: "Generación", kinds: ["generate"], done: (p) => p.synthetic_images > 0, count: (p) => p.synthetic_images },
   { path: "review", label: "Etiquetas", kinds: ["label"], done: (p) => (p.by_status.synthetic.approved ?? 0) > 0,
     count: (p) => (p.by_status.real.needs_review ?? 0) + (p.by_status.synthetic.needs_review ?? 0) + (p.by_status.synthetic.candidate ?? 0) + (p.by_status.real.candidate ?? 0) },

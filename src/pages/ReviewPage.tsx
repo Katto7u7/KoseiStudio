@@ -17,10 +17,11 @@ interface Box { class_id: number; cx: number; cy: number; w: number; h: number; 
 export default function ReviewPage({ projectId }: { projectId: string }) {
   const [origin, setOrigin] = useStored<Origin>(`kosei_rev_origin_${projectId}`, "real");
   const [status, setStatus] = useState<Filter>("needs_review");
+  const [sort, setSort] = useState<"recent" | "fidelity">("recent");
   const { data: project, refresh: reloadProject } = usePoll(() => get<Project>(`/projects/${projectId}`), 4000, [projectId]);
   const { data, refresh } = usePoll(
-    () => get<{ total: number; items: ImageRow[] }>(`/projects/${projectId}/images?origin=${origin}&status=${status}&limit=200`),
-    5000, [projectId, origin, status],
+    () => get<{ total: number; items: ImageRow[] }>(`/projects/${projectId}/images?origin=${origin}&status=${status}&sort=${sort}&limit=200`),
+    5000, [projectId, origin, status, sort],
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [bulk, setBulk] = useState(false);
@@ -39,10 +40,10 @@ export default function ReviewPage({ projectId }: { projectId: string }) {
     reloadProject();
   }, [items, refresh, reloadProject]);
 
+  // La seleccion siempre pertenece a la lista visible, tambien al cambiar de filtro.
   useEffect(() => {
-    if (!selectedId && items.length) setSelectedId(items[0].id);
+    if (!items.some((i) => i.id === selectedId)) setSelectedId(items[0]?.id ?? null);
   }, [items, selectedId]);
-  useEffect(() => { setSelectedId(null); }, [origin, status]);
 
   return (
     <>
@@ -63,7 +64,15 @@ export default function ReviewPage({ projectId }: { projectId: string }) {
       <Tabs value={status} onChange={setStatus} options={FILTERS.map((f) => ({ value: f.value, label: f.label, count: counts[f.value] ?? 0 }))} />
       {selectedId && project?.classes && <Inspector key={selectedId} imageId={selectedId} classes={project.classes} onDone={advance} />}
       <div style={{ marginTop: 16 }}>
-        <Card title={`${data?.total ?? 0} imágenes`}>
+        <Card
+          title={`${data?.total ?? 0} imágenes`}
+          actions={origin === "synthetic" ? (
+            <select aria-label="Orden" value={sort} onChange={(e) => setSort(e.target.value as "recent" | "fidelity")} style={{ width: 180 }}>
+              <option value="recent">Más recientes</option>
+              <option value="fidelity">Mayor parecido primero</option>
+            </select>
+          ) : undefined}
+        >
           {items.length
             ? <div className="gallery">{items.map((i) => <Thumb key={i.id} image={i} selected={i.id === selectedId} onClick={() => setSelectedId(i.id)} />)}</div>
             : <Empty title="Nada por aquí">{pending ? `Hay ${pending} imágenes pendientes de etiquetar.` : "No hay imágenes en este estado."}</Empty>}
@@ -196,6 +205,16 @@ function Inspector({ imageId, classes, onDone }: { imageId: string; classes: Kla
             </div>
           ) : <p className="muted">Sin cajas. Dibuja una, o aprueba si la imagen de verdad no contiene la clase.</p>}
         </Card>
+        {image.qc?.fidelity && (
+          <Card title="Parecido al sujeto" note="Contra las imágenes reales de train. Es una medida, no una verificación.">
+            <dl className="meta-list">
+              {image.qc.fidelity.face != null
+                ? <><dt>Rostro</dt><dd className="mono">{image.qc.fidelity.face.toFixed(2)} {image.qc.fidelity.same_person ? "(misma persona)" : "(no coincide)"}</dd></>
+                : <><dt>Rostro</dt><dd>No se detectó</dd></>}
+              <dt>Visual (CLIP)</dt><dd className="mono">{image.qc.fidelity.clip.toFixed(2)}</dd>
+            </dl>
+          </Card>
+        )}
         {image.generation && (
           <Card title="Generación">
             <dl className="meta-list">

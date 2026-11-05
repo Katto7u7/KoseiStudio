@@ -31,6 +31,8 @@ class GenerateIn(BaseModel):
     sampler: str
     scheduler: str
     batch_size: int = Field(1, ge=1, le=8)
+    refine: bool = False
+    refine_denoise: float = Field(0.4, ge=0.05, le=0.9)
 
 
 @router.get("/engine/models")

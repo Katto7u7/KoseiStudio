@@ -28,6 +28,10 @@ FILES: list[tuple[Path, str, bool]] = [
     (YOLO / "yolov8s-worldv2.pt", f"{ULTRA}/yolov8s-worldv2.pt", False),
     (WEIGHTS / "clip/ViT-B-32.pt",
      "https://openaipublic.azureedge.net/clip/models/40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af/ViT-B-32.pt", False),
+    (WEIGHTS / "face/face_detection_yunet_2023mar.onnx",
+     "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx", False),
+    (WEIGHTS / "face/face_recognition_sface_2021dec.onnx",
+     "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx", False),
     (WEIGHTS / "torch/hub/checkpoints/weights-inception-2015-12-05-6726825d.pth",
      "https://github.com/toshas/torch-fidelity/releases/download/v0.2.0/weights-inception-2015-12-05-6726825d.pth", True),
 ]

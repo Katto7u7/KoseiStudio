@@ -63,6 +63,7 @@ def list_images(
     origin: Optional[str] = Query(None, pattern="^(real|synthetic)$"),
     status: Optional[str] = None,
     split: Optional[str] = Query(None, pattern="^(train|val|test|none)$"),
+    sort: str = Query("recent", pattern="^(recent|fidelity)$"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
@@ -86,7 +87,9 @@ def list_images(
         f"(SELECT COUNT(*) FROM annotations a WHERE a.image_id=i.id) AS annotation_count, "
         f"(SELECT MAX(a.confidence) FROM annotations a WHERE a.image_id=i.id) AS top_confidence "
         f"FROM images i LEFT JOIN classes c ON c.id=i.class_id WHERE {clause} "
-        f"ORDER BY i.created_at DESC, i.id LIMIT ? OFFSET ?",
+        + ("ORDER BY COALESCE(json_extract(i.qc,'$.fidelity.face'), json_extract(i.qc,'$.fidelity.clip')) DESC, i.id "
+           if sort == "fidelity" else "ORDER BY i.created_at DESC, i.id ")
+        + "LIMIT ? OFFSET ?",
         [*args, limit, offset],
     )
     return {"total": total, "items": [_public(r) for r in rows]}

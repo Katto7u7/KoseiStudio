@@ -19,7 +19,7 @@ from typing import Any, Optional
 from .. import config, db
 from ..jobs import Cancelled, JobContext, register
 from . import arch as arch_mod
-from . import forge, gpu, storage
+from . import fidelity, forge, gpu, storage
 
 log = logging.getLogger("kosei.training")
 
@@ -274,6 +274,116 @@ def run_training(ctx: JobContext) -> dict[str, Any]:
     return {"lora_id": lora_id, "file": dest.name, "size_bytes": dest.stat().st_size, "checkpoints": checkpoints, "images": len(hashes)}
 
 
+EVAL_PROMPTS = [
+    "{token} {subject}, portrait photograph, soft daylight, looking at camera",
+    "{token} {subject}, medium shot, sitting at a cafe table, natural window light",
+    "{token} {subject}, full body photograph, walking on a city street at dusk",
+    "{token} {subject}, candid photograph in an office, indoor lighting",
+]
+
+
+def lora_files(lora: dict[str, Any]) -> list[Path]:
+    output = storage.project_dir(lora["project_id"]) / "loras" / lora["id"] / "output"
+    return sorted(output.glob("*.safetensors"), key=lambda p: (p.stem == lora["name"], p.stem))
+
+
+@register("lora_eval", "gpu")
+def run_lora_eval(ctx: JobContext) -> dict[str, Any]:
+    """Genera las mismas escenas con cada punto de control y mide el parecido al sujeto."""
+    p = ctx.params
+    lora = db.one("SELECT * FROM loras WHERE id=?", [p["lora_id"]])
+    files = lora_files(lora)
+    if not files:
+        raise ValueError("Este LoRA no tiene archivos locales que evaluar")
+    arch = lora["arch"]
+    defaults = forge.ARCH_DEFAULTS[arch]
+    base = storage.project_dir(lora["project_id"]) / "loras" / lora["id"] / "eval"
+    shutil.rmtree(base, ignore_errors=True)
+    base.mkdir(parents=True)
+    # Forge lee LoRAs recursivamente: una subcarpeta temporal no contamina el registro.
+    staging = config.LORA_DIR / f"_eval_{lora['id']}"
+    staging.mkdir(exist_ok=True)
+    prompts = [t.format(token=lora["token"] or "", subject=p.get("subject") or "person").strip() for t in EVAL_PROMPTS]
+    total = len(files) * len(prompts) * len(p.get("seeds", [11, 22]))
+    done = 0
+    results = []
+    ctx.on_cancel(forge.interrupt)
+    try:
+        forge.ensure_checkpoint(p["checkpoint"], arch)
+        for file in files:
+            alias = f"_eval_{file.stem}"
+            shutil.copy2(file, staging / f"{alias}.safetensors")
+        forge.refresh()
+        for file in files:
+            alias = f"_eval_{file.stem}"
+            folder = base / file.stem
+            folder.mkdir()
+            scores, shots = [], []
+            for prompt_index, prompt in enumerate(prompts):
+                for seed in p.get("seeds", [11, 22]):
+                    ctx.check_cancel()
+                    ctx.progress(done, total, f"{file.stem}: escena {prompt_index + 1} de {len(prompts)}")
+                    payload = {
+                        "prompt": f"{prompt} <lora:{alias}:{float(p.get('weight', 0.9)):g}>",
+                        "negative_prompt": "cartoon, painting, illustration, deformed, blurry, low quality, watermark, text",
+                        "seed": seed, "steps": defaults["steps"], "cfg_scale": defaults["cfg_scale"],
+                        "width": defaults["width"], "height": defaults["height"],
+                        "sampler_name": defaults["sampler"], "scheduler": defaults["scheduler"],
+                        "batch_size": 1, "n_iter": 1,
+                    }
+                    if arch == "flux":
+                        payload["distilled_cfg_scale"] = defaults["distilled_cfg_scale"]
+                    images, _ = forge.txt2img(payload)
+                    ctx.check_cancel()
+                    name = f"{prompt_index}_{seed}.png"
+                    images[0].convert("RGB").save(folder / name, "PNG")
+                    scored = fidelity.score(lora["project_id"], folder / name) or {}
+                    scores.append(scored)
+                    shots.append({"file": name, "prompt_index": prompt_index, "seed": seed, **scored})
+                    done += 1
+            step = re.search(r"step0*(\d+)", file.stem)
+            results.append({
+                "file": file.name, "step": int(step.group(1)) if step else lora["config"].get("steps"),
+                "is_final": file.stem == lora["name"], "shots": shots, **fidelity.summarize(scores),
+            })
+            (base / "result.json").write_text(json.dumps(results, ensure_ascii=False), encoding="utf-8")
+    finally:
+        ctx.on_cancel(None)
+        shutil.rmtree(staging, ignore_errors=True)
+        try:
+            forge.refresh()
+        except forge.ForgeError:
+            pass
+    ref = fidelity.reference(lora["project_id"]) or {}
+    summary = {"prompts": prompts, "checkpoints": results, "real_baseline": ref.get("baseline_face"), "threshold": fidelity.SAME_PERSON_THRESHOLD}
+    (base / "result.json").write_text(json.dumps(summary, ensure_ascii=False), encoding="utf-8")
+    return {"checkpoints": len(results)}
+
+
+def promote_checkpoint(lora: dict[str, Any], filename: str) -> dict[str, Any]:
+    """Publica un punto de control como LoRA propio, con el mismo linaje."""
+    source = next((f for f in lora_files(lora) if f.name == filename), None)
+    if source is None:
+        raise FileNotFoundError("Ese punto de control no existe")
+    if source.stem == lora["name"]:
+        raise ValueError("Ese ya es el archivo final del LoRA")
+    step = re.search(r"step0*(\d+)", source.stem)
+    name = f"{lora['name']}_s{step.group(1)}" if step else source.stem
+    dest = config.LORA_DIR / f"{name}.safetensors"
+    if dest.exists() or db.one("SELECT 1 FROM loras WHERE name=?", [name]):
+        raise FileExistsError(f"Ya existe {name}")
+    shutil.copy2(source, dest)
+    new_id = db.new_id()
+    db.insert("loras", {
+        "id": new_id, "project_id": lora["project_id"], "name": name, "arch": lora["arch"],
+        "base_model": lora["base_model"], "token": lora["token"], "origin": "trained", "status": "ready",
+        "config": {**(lora["config"] or {}), "promoted_from": lora["id"], "steps": int(step.group(1)) if step else None},
+        "train_hashes": lora["train_hashes"], "created_at": db.now(),
+    })
+    forge.refresh()
+    return db.one("SELECT id, name FROM loras WHERE id=?", [new_id])
+
+
 def _kill_group(proc: subprocess.Popen) -> None:
     if proc.poll() is None:
         try:
@@ -288,7 +398,7 @@ def sync_external_loras() -> None:
         return
     known = {r["name"] for r in db.query("SELECT name FROM loras")}
     for path in sorted(config.LORA_DIR.glob("*.safetensors")):
-        if path.stem in known:
+        if path.stem in known or path.stem.startswith("_"):
             continue
         try:
             info = arch_mod.lora_info(path)

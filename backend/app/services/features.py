@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import threading
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,19 @@ def _clip():
         return _cache["clip"]
 
 
+# Muletillas de BLIP que no describen nada y compiten con el token.
+_FILLER = re.compile(r"^(there (is|are)|arafed|araffe|someone is|this is|it is)\s+", re.IGNORECASE)
+
+
+def clean_caption(text: str) -> str:
+    text = text.strip()
+    while True:
+        cleaned = _FILLER.sub("", text)
+        if cleaned == text:
+            return re.sub(r"\s+t - shirt", " t-shirt", text)
+        text = cleaned
+
+
 def caption_image(path: Path) -> str:
     import torch
     processor, model = _blip()
@@ -56,7 +70,7 @@ def caption_image(path: Path) -> str:
         inputs = processor(image.convert("RGB"), return_tensors="pt")
     with torch.inference_mode():
         ids = model.generate(**inputs, max_length=60, min_length=8, num_beams=3)
-    return processor.decode(ids[0], skip_special_tokens=True).strip()
+    return clean_caption(processor.decode(ids[0], skip_special_tokens=True))
 
 
 @register("caption", "cpu")
@@ -91,6 +105,20 @@ def load_embeddings(project_id: str) -> dict[str, np.ndarray]:
         return {}
     with np.load(path) as data:
         return dict(zip(data["ids"].tolist(), data["vectors"]))
+
+
+def clip_vectors(paths: list[Path], batch: int = 16) -> np.ndarray:
+    """Embeddings CLIP normalizados, sin guardarlos en disco."""
+    import torch
+    processor, model = _clip()
+    out = []
+    for start in range(0, len(paths), batch):
+        pics = [Image.open(p).convert("RGB") for p in paths[start:start + batch]]
+        inputs = processor(images=pics, return_tensors="pt")
+        with _lock, torch.inference_mode():
+            vectors = model.get_image_features(**inputs)
+        out.append(torch.nn.functional.normalize(vectors, dim=-1).numpy())
+    return np.concatenate(out)
 
 
 def embed_images(ctx: JobContext, images: list[dict[str, Any]], batch: int = 16) -> dict[str, np.ndarray]:
