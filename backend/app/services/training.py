@@ -284,7 +284,10 @@ EVAL_PROMPTS = [
 
 def lora_files(lora: dict[str, Any]) -> list[Path]:
     output = storage.project_dir(lora["project_id"]) / "loras" / lora["id"] / "output"
-    return sorted(output.glob("*.safetensors"), key=lambda p: (p.stem == lora["name"], p.stem))
+    final_step = f"step{int((lora['config'] or {}).get('steps') or 0):08d}"
+    # El punto de control del ultimo paso es el mismo modelo que el archivo final.
+    files = [p for p in output.glob("*.safetensors") if not p.stem.endswith(final_step)]
+    return sorted(files, key=lambda p: (p.stem == lora["name"], p.stem))
 
 
 @register("lora_eval", "gpu")
