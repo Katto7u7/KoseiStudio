@@ -14,7 +14,7 @@ LORA_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 
 def project_dir(project_id: str) -> Path:
     if not re.fullmatch(r"[0-9a-f]{16}", project_id):
-        raise ValueError("Identificador de proyecto invalido")
+        raise ValueError("Identificador de proyecto inválido")
     return config.PROJECTS_DIR / project_id
 
 

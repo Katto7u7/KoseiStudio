@@ -142,7 +142,7 @@ def _run_one(queue: str) -> bool:
         ctx.log(traceback.format_exc())
         db.update("jobs", job["id"], {
             "status": "failed", "finished_at": db.now(),
-            "error": str(exc)[:4000], "message": "Fallo",
+            "error": str(exc)[:4000], "message": "Falló",
         })
     finally:
         _running.pop(job["id"], None)

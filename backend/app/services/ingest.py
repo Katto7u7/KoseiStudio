@@ -1,4 +1,4 @@
-"""Importacion segura de datasets y registro de imagenes.
+"""Importacion segura de datasets y registro de imágenes.
 
 El original se conserva tal cual y nunca se sobrescribe. Se guarda aparte un derivado
 sRGB, que es el que usan las etapas posteriores. Las etiquetas YOLO se importan si vienen.
@@ -33,7 +33,7 @@ def _safe_member(info: zipfile.ZipInfo) -> Optional[str]:
         return None
     mode = (info.external_attr >> 16) & 0xFFFF
     if stat.S_ISLNK(mode):
-        raise UnsafeArchive(f"El ZIP contiene un enlace simbolico: {name}")
+        raise UnsafeArchive(f"El ZIP contiene un enlace simbólico: {name}")
     parts = [p for p in name.split("/") if p not in ("", ".")]
     if name.startswith("/") or re.match(r"^[A-Za-z]:", name) or ".." in parts:
         raise UnsafeArchive(f"Ruta insegura en el ZIP: {name}")
@@ -43,14 +43,14 @@ def _safe_member(info: zipfile.ZipInfo) -> Optional[str]:
 
 
 def extract_zip(archive: Path, dest: Path) -> list[Path]:
-    """Extrae validando zip-slip, enlaces y bombas de descompresion antes de escribir."""
+    """Extrae validando zip-slip, enlaces y bombas de descompresión antes de escribir."""
     extracted: list[Path] = []
     with zipfile.ZipFile(archive) as zf:
         infos = zf.infolist()
         if len(infos) > config.MAX_ZIP_ENTRIES:
             raise UnsafeArchive(f"El ZIP tiene demasiados archivos ({len(infos)})")
         if sum(i.file_size for i in infos) > config.MAX_ZIP_UNCOMPRESSED:
-            raise UnsafeArchive("El contenido descomprimido del ZIP supera el limite")
+            raise UnsafeArchive("El contenido descomprimido del ZIP supera el límite")
         root = dest.resolve()
         for info in infos:
             name = _safe_member(info)
@@ -65,7 +65,7 @@ def extract_zip(archive: Path, dest: Path) -> list[Path]:
                 for chunk in iter(lambda: src.read(1 << 20), b""):
                     written += len(chunk)
                     if written > config.MAX_ZIP_UNCOMPRESSED:
-                        raise UnsafeArchive("El contenido real del ZIP supera el limite declarado")
+                        raise UnsafeArchive("El contenido real del ZIP supera el límite declarado")
                     out.write(chunk)
             extracted.append(target)
     return extracted
@@ -150,7 +150,7 @@ def _label_for(image: Path, root: Path) -> Optional[Path]:
 
 
 def parse_yolo_line(line: str) -> Optional[tuple[int, list[float]]]:
-    """Valida una linea YOLO. Devuelve (clase, numeros) o None si es invalida."""
+    """Valida una linea YOLO. Devuelve (clase, numeros) o None si es inválida."""
     parts = line.split()
     if len(parts) < 5:
         return None
@@ -217,7 +217,7 @@ def run_ingest(ctx: JobContext) -> dict[str, Any]:
     upload_dir = Path(ctx.params["upload_dir"])
     work = upload_dir.resolve()
     if config.TMP_DIR.resolve() not in work.parents:
-        raise ValueError("Directorio de carga invalido")
+        raise ValueError("Directorio de carga inválido")
 
     report: dict[str, Any] = {
         "imported": 0, "duplicates": [], "corrupt": [], "skipped": [], "labels_imported": 0,

@@ -15,7 +15,7 @@ export default function SystemPage() {
   const missing = Object.entries(system.weights).filter(([, ok]) => !ok).map(([k]) => k);
   return (
     <>
-      <PageHead title="Sistema" sub="Estado real del motor, la GPU, los pesos y todos los trabajos." />
+      <PageHead title="Sistema" sub="Estado real del motor de generación, la GPU, los modelos y todos los trabajos." />
       <div className="grid grid-2">
         <Card title="Motor de generación" note={system.engine.ready ? "Stable Diffusion WebUI Forge" : "Aún no responde; tarda unos minutos al arrancar."}>
           <div className="stack">
@@ -25,13 +25,10 @@ export default function SystemPage() {
         </Card>
         <Card title="GPU" note={gpu?.name ?? "No se detecta una GPU NVIDIA en el contenedor"}>
           {gpu ? (
-            <div className="stack">
-              <div className="stat-row">
-                <Stat value={`${(gpu.memory_used_mib / 1024).toFixed(1)} / ${(gpu.memory_total_mib / 1024).toFixed(0)} GB`} label="VRAM en uso" />
-                <Stat value={`${gpu.utilization_pct} %`} label="Uso" />
-                <Stat value={`${gpu.temperature_c} °C`} label="Temperatura" />
-              </div>
-              <Progress value={gpu.memory_used_mib} total={gpu.memory_total_mib} />
+            <div className="gauge-row">
+              <Meter label="Memoria de video" value={gpu.memory_used_mib} total={gpu.memory_total_mib} text={`${(gpu.memory_used_mib / 1024).toFixed(1)} de ${(gpu.memory_total_mib / 1024).toFixed(0)} GB`} />
+              <Meter label="Uso" value={gpu.utilization_pct} total={100} text={`${gpu.utilization_pct} %`} warm />
+              <Meter label="Temperatura" value={gpu.temperature_c} total={95} text={`${gpu.temperature_c} °C`} warm />
             </div>
           ) : <Notice kind="warn">Sin GPU no se puede generar ni entrenar.</Notice>}
         </Card>
@@ -43,10 +40,7 @@ export default function SystemPage() {
           </div>
         </Card>
         <Card title="Disco">
-          <div className="stat-row">
-            <Stat value={formatBytes(system.disk.free_bytes)} label="Libre" />
-            <Stat value={formatBytes(system.disk.total_bytes)} label="Total" />
-          </div>
+          <Meter label="Espacio usado" value={system.disk.total_bytes - system.disk.free_bytes} total={system.disk.total_bytes} text={`${formatBytes(system.disk.free_bytes)} libres de ${formatBytes(system.disk.total_bytes)}`} />
         </Card>
       </div>
       <div style={{ marginTop: 16 }}>
@@ -76,5 +70,15 @@ export default function SystemPage() {
         </Card>
       </div>
     </>
+  );
+}
+
+function Meter({ label, value, total, text, warm }: { label: string; value: number; total: number; text: string; warm?: boolean }) {
+  const pct = Math.max(0, Math.min(100, (value / Math.max(total, 1)) * 100));
+  return (
+    <div className="meter">
+      <div className="row-between"><span className="muted" style={{ fontSize: 13 }}>{label}</span><span className="mono" style={{ fontSize: 13 }}>{text}</span></div>
+      <div className={`meter-track${warm ? " warm" : ""}`} role="meter" aria-label={label} aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${pct}%` }} /></div>
+    </div>
   );
 }

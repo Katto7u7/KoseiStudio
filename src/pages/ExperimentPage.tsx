@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { get, post } from "../lib/api";
 import { formatDate, usePoll } from "../lib/hooks";
 import { ConditionDots } from "../ui/charts";
-import { Card, Empty, Field, JobPill, Notice, PageHead, Progress, useAction } from "../ui/kit";
+import { FlaskConical } from "lucide-react";
+import { Card, Drawer, Empty, Field, Help, JobPill, Notice, PageHead, Progress, Requirement, Requirements, useAction } from "../ui/kit";
 
 interface Condition { name: string; n_synthetic: number; use_real: boolean }
 
@@ -29,6 +30,7 @@ export default function ExperimentPage({ projectId }: { projectId: string }) {
   const [imgsz, setImgsz] = useState(640);
   const [batch, setBatch] = useState(16);
   const [preflight, setPreflight] = useState<any>(null);
+  const [creating, setCreating] = useState(false);
   const { busy, run } = useAction();
   const seedList = seeds.split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => !Number.isNaN(n));
   const payload = { name, conditions, baseline: conditions[0]?.name, seeds: seedList, epochs, imgsz, batch, model: "yolo11n.yaml" };
@@ -44,50 +46,82 @@ export default function ExperimentPage({ projectId }: { projectId: string }) {
 
   const setCondition = (i: number, patch: Partial<Condition>) => setConditions(conditions.map((c, j) => (j === i ? { ...c, ...patch } : c)));
 
+  // Los problemas de la validacion previa se muestran como pasos con el camino para resolverlos.
+  const linkFor = (text: string) => {
+    const t = text.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    if (t.includes("bloquead") || t.includes("compartidas")) return { to: `/p/${projectId}/dataset`, action: "Ir a partición" };
+    if (t.includes("lora")) return { to: `/p/${projectId}/lora`, action: "Ver LoRAs" };
+    if (t.includes("sintetica")) return { to: `/p/${projectId}/review`, action: "Aprobar sintéticas" };
+    return { to: `/p/${projectId}/review`, action: "Revisar etiquetas" };
+  };
+  const requirements: Requirement[] = preflight
+    ? preflight.ok
+      ? [{ ok: true, text: `Entrenamiento ${preflight.counts.train}, validación ${preflight.counts.val} y prueba ${preflight.counts.test} reales aprobadas; ${preflight.synthetic_approved} sintéticas aprobadas` }]
+      : preflight.problems.map((p: string) => ({ ok: false, text: p, ...linkFor(p) }))
+    : [];
+
   return (
     <>
-      <PageHead title="Experimento" sub="Misma arquitectura y mismos hiperparámetros; solo cambian los datos de train. Se evalúa siempre en la prueba real bloqueada, sin pesos preentrenados." />
-      <div className="grid grid-side">
-        <Card title="Nuevo experimento">
-          <div className="fields">
-            <Field label="Nombre"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} /></Field>
-            <div className="field">
-              <span>Condiciones. La primera es la base de comparación.</span>
-              <table className="table">
-                <thead><tr><th>Nombre</th><th>Sintéticas</th><th>Usa reales</th><th /></tr></thead>
-                <tbody>
-                  {conditions.map((c, i) => (
-                    <tr key={i}>
-                      <td><input aria-label="Nombre de la condición" value={c.name} onChange={(e) => setCondition(i, { name: e.target.value.replace(/[^A-Za-z0-9_-]/g, "_") })} /></td>
-                      <td><input aria-label="Sintéticas" type="number" min={0} value={c.n_synthetic} onChange={(e) => setCondition(i, { n_synthetic: +e.target.value })} style={{ width: 70 }} /></td>
-                      <td><input aria-label="Usa reales" type="checkbox" checked={c.use_real} onChange={(e) => setCondition(i, { use_real: e.target.checked })} /></td>
-                      <td><button className="btn btn-small" aria-label="Quitar condición" disabled={conditions.length <= 2} onClick={() => setConditions(conditions.filter((_, j) => j !== i))}>×</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <button className="btn btn-small" disabled={conditions.length >= 8} onClick={() => setConditions([...conditions, { name: `cond_${conditions.length + 1}`, n_synthetic: 0, use_real: true }])}>Agregar condición</button>
-            </div>
-            <Field label="Seeds de entrenamiento" hint="Separadas por coma. Con 3 o más se calcula un intervalo de confianza útil."><input value={seeds} onChange={(e) => setSeeds(e.target.value)} /></Field>
+      <PageHead
+        title="Experimento"
+        sub="Entrena el mismo detector con y sin tus imágenes sintéticas, y compáralos sobre la prueba real que nunca vieron. Mismos ajustes en todas las corridas; solo cambian los datos de entrenamiento."
+        actions={<button className="btn btn-primary" onClick={() => setCreating(true)}><FlaskConical size={16} /> Nuevo experimento</button>}
+      />
+      {experiments?.length ? (
+        <div className="stack">{experiments.map((e) => <ExperimentResult key={e.id} experiment={e} />)}</div>
+      ) : (
+        <div className="grid grid-2">
+          <Empty title="Aún no corres ningún experimento" action={<button className="btn btn-primary" onClick={() => setCreating(true)}>Configurar el primero</button>}>
+            Verás la exactitud del detector en cada condición, con un veredicto calculado: mejora, sin cambio concluyente o empeora. Se reporta lo que salga.
+          </Empty>
+          {requirements.length > 0 && <Card title="Antes de empezar"><Requirements items={requirements} /></Card>}
+        </div>
+      )}
+      {creating && (
+        <Drawer
+          title="Nuevo experimento"
+          onClose={() => setCreating(false)}
+          footer={
+            <button className="btn btn-primary btn-block btn-large" disabled={busy || !preflight?.ok || !name.trim()} onClick={async () => {
+              await run(() => post(`/projects/${projectId}/experiments`, payload), "Experimento en cola");
+              setCreating(false);
+              refresh();
+            }}>Iniciar {conditions.length * seedList.length} corridas</button>
+          }
+        >
+          <Requirements items={requirements} />
+          {preflight?.warnings?.map((w: string) => <Notice key={w} kind="warn">{w}</Notice>)}
+          <Field label="Nombre"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} /></Field>
+          <div className="field">
+            <span className="field-label">Condiciones <Help>Cada condición entrena un detector con distintos datos. La primera es la base de comparación: normalmente, solo reales.</Help></span>
+            <table className="table">
+              <thead><tr><th>Nombre</th><th>Sintéticas</th><th>Con reales</th><th /></tr></thead>
+              <tbody>
+                {conditions.map((c, i) => (
+                  <tr key={i}>
+                    <td><input aria-label="Nombre de la condición" value={c.name} onChange={(e) => setCondition(i, { name: e.target.value.replace(/[^A-Za-z0-9_-]/g, "_") })} /></td>
+                    <td><input aria-label="Sintéticas" type="number" min={0} value={c.n_synthetic} onChange={(e) => setCondition(i, { n_synthetic: +e.target.value })} style={{ width: 80 }} /></td>
+                    <td><input aria-label="Usa reales" type="checkbox" checked={c.use_real} onChange={(e) => setCondition(i, { use_real: e.target.checked })} /></td>
+                    <td><button className="btn btn-small btn-ghost" aria-label="Quitar condición" disabled={conditions.length <= 2} onClick={() => setConditions(conditions.filter((_, j) => j !== i))}>Quitar</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <button className="btn btn-small" style={{ justifySelf: "start" }} disabled={conditions.length >= 8} onClick={() => setConditions([...conditions, { name: `cond_${conditions.length + 1}`, n_synthetic: 0, use_real: true }])}>Agregar condición</button>
+          </div>
+          <Field label="Semillas (seeds)" help="Cada semilla repite el entrenamiento con otro azar inicial. Con 3 o más se calcula un intervalo de confianza útil." hint="Separadas por coma.">
+            <input value={seeds} onChange={(e) => setSeeds(e.target.value)} />
+          </Field>
+          <details className="advanced">
+            <summary>Ajustes del detector</summary>
             <div className="fields-3">
-              <Field label="Épocas"><input type="number" min={1} value={epochs} onChange={(e) => setEpochs(+e.target.value)} /></Field>
-              <Field label="Imagen"><input type="number" step={32} min={160} value={imgsz} onChange={(e) => setImgsz(+e.target.value)} /></Field>
+              <Field label="Vueltas (épocas)" help="Cuántas veces el detector recorre todas las imágenes de entrenamiento."><input type="number" min={1} value={epochs} onChange={(e) => setEpochs(+e.target.value)} /></Field>
+              <Field label="Tamaño"><input type="number" step={32} min={160} value={imgsz} onChange={(e) => setImgsz(+e.target.value)} /></Field>
               <Field label="Lote"><input type="number" min={1} value={batch} onChange={(e) => setBatch(+e.target.value)} /></Field>
             </div>
-            {preflight?.problems?.map((p: string) => <Notice key={p} kind="bad">{p}</Notice>)}
-            {preflight?.warnings?.map((w: string) => <Notice key={w} kind="warn">{w}</Notice>)}
-            {preflight?.ok && <Notice kind="good" title="Validación previa correcta">{`Train ${preflight.counts.train}, val ${preflight.counts.val}, test ${preflight.counts.test}. ${preflight.synthetic_approved} sintéticas aprobadas.`}</Notice>}
-            <button className="btn btn-primary btn-block" disabled={busy || !preflight?.ok || !name.trim()} onClick={() => run(() => post(`/projects/${projectId}/experiments`, payload), "Experimento en cola").then(refresh)}>
-              Iniciar {conditions.length * seedList.length} corridas
-            </button>
-          </div>
-        </Card>
-        <div className="stack">
-          {experiments?.length
-            ? experiments.map((e) => <ExperimentResult key={e.id} experiment={e} />)
-            : <Empty title="Sin experimentos">El resultado puede ser mejora, ningún cambio o empeoramiento; se reporta lo que salga.</Empty>}
-        </div>
-      </div>
+          </details>
+        </Drawer>
+      )}
     </>
   );
 }

@@ -47,7 +47,7 @@ def test_project_crud_and_persistence(client):
     assert created["pipeline"]["real_images"] == 0
     assert client.get(f"/api/projects/{created['id']}").json()["name"] == "Uno"
     assert client.patch(f"/api/projects/{created['id']}", json={"name": "Dos"}).json()["name"] == "Dos"
-    # Una nueva conexion ve lo mismo: esta en disco, no en memoria.
+    # Una nueva conexión ve lo mismo: está en disco, no en memoria.
     db.close_thread_connection()
     assert db.one("SELECT name FROM projects WHERE id=?", [created["id"]])["name"] == "Dos"
     assert client.delete(f"/api/projects/{created['id']}").status_code == 204
@@ -168,7 +168,7 @@ def test_lora_import_rejects_non_safetensors(client, project):
     assert res.status_code == 422
 
 
-# ---------- Particion y fuga ----------
+# ---------- Partición y fuga ----------
 
 def test_split_is_reproducible_and_lock_is_enforced(client, project):
     pid = project["id"]
@@ -267,7 +267,7 @@ def test_failed_job_keeps_error(client):
     assert job["status"] == "failed" and "division" in job["error"]
 
 
-# ---------- Generacion ----------
+# ---------- Generación ----------
 
 def _gen_body(class_id, **over):
     return {
@@ -305,9 +305,11 @@ def test_generation_saves_metadata_and_labels(client, monkeypatch, project, fake
         assert json.loads(png.text["kosei_provenance"])["synthetic"] is True
     # Sin repetir combinaciones hasta agotarlas: 2 fondos x 1 luz.
     assert sorted(c["prompt"] for c in fake_forge.calls[:2]) == ["foto, a, c", "foto, b, c"]
-    label_job = jobs.active_job(pid, "label")
-    if label_job:
-        wait_job(client, label_job["id"])
+    for _ in range(100):
+        active = jobs.active_job(pid, "label")
+        if not active:
+            break
+        wait_job(client, active["id"])
     assert {r["status"] for r in db.query("SELECT status FROM images WHERE project_id=?", [pid])} == {"candidate"}
 
 
@@ -352,7 +354,7 @@ def test_batches_only_group_same_scenario():
     assert generation._batches([0, 3], [["a"]] * 4, 3) == [[0], [3]]
 
 
-# ---------- Etiquetado y revision ----------
+# ---------- Etiquetado y revisión ----------
 
 @pytest.mark.parametrize("boxes,polygons,flags,expected", [
     ([], [], [], "no_detection"),
@@ -402,7 +404,7 @@ def test_bulk_approve_skips_images_without_boxes(client, monkeypatch, project):
     assert res == {"changed": 0, "skipped": 2}
 
 
-# ---------- Construccion y exportacion ----------
+# ---------- Construcción y exportación ----------
 
 def _synthetic(client, monkeypatch, pid, n=3):
     cls_id = db.query("SELECT id FROM classes WHERE project_id=?", [pid])[0]["id"]
@@ -466,7 +468,7 @@ def test_validate_zip_detects_broken_exports(tmp_path):
     result = export.validate_zip(path, ["detect"])
     assert not result["ok"]
     joined = " ".join(result["problems"])
-    assert "Sin etiqueta" in joined and "Etiqueta invalida" in joined
+    assert "Sin etiqueta" in joined and "Etiqueta inválida" in joined
 
 
 # ---------- Experimento ----------
@@ -488,7 +490,7 @@ def test_preflight_blocks_invalid_experiments(client, monkeypatch, project):
     check = experiment.preflight(pid, [{"name": "A", "n_synthetic": 0}, {"name": "B", "n_synthetic": 5}])
     assert not check["ok"]
     assert any("bloqueada" in p for p in check["problems"])
-    assert any("sinteticas" in p for p in check["problems"])
+    assert any("sintéticas" in p for p in check["problems"])
 
 
 def test_preflight_flags_contaminated_and_external_lora(client, monkeypatch, project):
@@ -572,5 +574,15 @@ def test_mask_polygon_uses_largest_contour_without_bridges():
     mask[80:85, 80:85] = 1
     polygon = labeling.mask_to_polygon(mask)
     xs, ys = polygon[0::2], polygon[1::2]
-    assert max(xs) < 0.7 and max(ys) < 0.7, "No debe unir la region pequena con una linea"
+    assert max(xs) < 0.7 and max(ys) < 0.7, "No debe unir la región pequeña con una linea"
     assert labeling.mask_to_polygon(np.zeros((10, 10))) is None
+
+
+def test_label_job_is_requeued_when_one_is_already_running(client, project):
+    """Una imagen que llega mientras el etiquetado termina no puede quedar pendiente."""
+    pid = project["id"]
+    running = db.new_id()
+    db.insert("jobs", {"id": running, "project_id": pid, "kind": "label", "queue": "none", "status": "running", "params": {}, "created_at": db.now()})
+    first = labeling.ensure_label_job(pid)
+    assert first != running
+    assert labeling.ensure_label_job(pid) == first, "Una tarea en cola si se reutiliza"

@@ -1,6 +1,6 @@
-"""Particion train/val/test controlada y deteccion de fuga de datos.
+"""Partición train/val/test controlada y detección de fuga de datos.
 
-Los casi duplicados van siempre al mismo split: separarlos filtraria informacion de
+Los casi duplicados van siempre al mismo split: separarlos filtraria información de
 prueba hacia entrenamiento. Al bloquear, se guarda un hash que deja constancia del reparto.
 """
 from __future__ import annotations
@@ -39,14 +39,14 @@ def _groups(images: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
 def assign(project_id: str, train: int, val: int, test: int, seed: int) -> dict[str, Any]:
     project = db.one("SELECT * FROM projects WHERE id=?", [project_id])
     if project["split_locked_at"]:
-        raise ValueError("La particion esta bloqueada")
+        raise ValueError("La partición está bloqueada")
     images = db.query(
         "SELECT id, phash, class_id FROM images WHERE project_id=? AND origin='real' AND status!='rejected' ORDER BY sha256",
         [project_id],
     )
     total = train + val + test
     if not images:
-        raise ValueError("No hay imagenes reales")
+        raise ValueError("No hay imágenes reales")
     if total <= 0 or min(train, val, test) < 0:
         raise ValueError("Cantidades invalidas")
 
@@ -89,11 +89,11 @@ def split_hash(project_id: str) -> str:
 def lock(project_id: str) -> dict[str, Any]:
     report = leakage_report(project_id)
     if report["counts"]["unassigned"]:
-        raise ValueError(f"Hay {report['counts']['unassigned']} imagenes sin particion")
+        raise ValueError(f"Hay {report['counts']['unassigned']} imágenes sin partición")
     if not report["counts"]["train"] or not report["counts"]["test"]:
-        raise ValueError("Se necesitan imagenes en train y test para bloquear")
+        raise ValueError("Se necesitan imágenes en train y test para bloquear")
     if report["cross_split_near_duplicates"]:
-        raise ValueError("Hay casi duplicados entre particiones: repite la particion")
+        raise ValueError("Hay casi duplicados entre particiones: repite la partición")
     digest = split_hash(project_id)
     db.update("projects", project_id, {"split_locked_at": db.now(), "split_hash": digest, "updated_at": db.now()})
     return {"split_hash": digest, **report}
@@ -115,7 +115,7 @@ def leakage_report(project_id: str) -> dict[str, Any]:
                 if distance <= NEAR_BITS:
                     cross.append({"a": a["filename"], "a_split": a["split"], "b": b["filename"], "b_split": b["split"], "distance": distance})
 
-    # Un LoRA entrenado con imagenes de val o test contaminaria el experimento.
+    # Un LoRA entrenado con imágenes de val o test contaminaria el experimento.
     protected = {r["sha256"] for r in rows if r["split"] in ("val", "test")}
     lora_leaks = []
     for lora in db.query("SELECT id, name, train_hashes FROM loras WHERE project_id=? AND train_hashes IS NOT NULL", [project_id]):

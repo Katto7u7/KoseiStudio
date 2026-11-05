@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Annotation, ImageRow, Klass, Origin, Project, get, post, put } from "../lib/api";
 import { usePoll, useStored } from "../lib/hooks";
-import { Card, Confirm, Empty, Notice, OriginPill, PageHead, StatusPill, Tabs, Thumb, useAction } from "../ui/kit";
+import { ScanSearch } from "lucide-react";
+import { Card, Confirm, CountUp, Empty, FidelityScale, Notice, OriginPill, PageHead, Progress, Segmented, StatusPill, Tabs, Thumb, useAction } from "../ui/kit";
 
 const FILTERS = [
   { value: "needs_review", label: "Revisar" },
@@ -14,21 +15,27 @@ type Filter = (typeof FILTERS)[number]["value"];
 
 interface Box { class_id: number; cx: number; cy: number; w: number; h: number; polygon?: number[] | null; confidence?: number | null; source?: string }
 
+const THRESHOLD = 0.45;
+
 export default function ReviewPage({ projectId }: { projectId: string }) {
   const [origin, setOrigin] = useStored<Origin>(`kosei_rev_origin_${projectId}`, "real");
   const [status, setStatus] = useState<Filter>("needs_review");
   const [sort, setSort] = useState<"recent" | "fidelity">("recent");
   const { data: project, refresh: reloadProject } = usePoll(() => get<Project>(`/projects/${projectId}`), 4000, [projectId]);
   const { data, refresh } = usePoll(
-    () => get<{ total: number; items: ImageRow[] }>(`/projects/${projectId}/images?origin=${origin}&status=${status}&sort=${sort}&limit=200`),
+    () => get<{ total: number; items: ImageRow[] }>(`/projects/${projectId}/images?origin=${origin}&status=${status}&sort=${origin === "synthetic" ? sort : "recent"}&limit=200`),
     5000, [projectId, origin, status, sort],
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [bulk, setBulk] = useState(false);
+  const [bulk, setBulk] = useState<null | "candidates" | "similar">(null);
   const { busy, run } = useAction();
   const items = data?.items ?? [];
   const counts = project?.pipeline.by_status[origin] ?? {};
   const pending = counts.pending ?? 0;
+  const totalOrigin = origin === "real" ? project?.pipeline.real_images ?? 0 : project?.pipeline.synthetic_images ?? 0;
+  const decided = (counts.approved ?? 0) + (counts.rejected ?? 0);
+  // Parecido al sujeto con caja: lo unico que se puede aprobar en lote sin ver una por una.
+  const similar = items.filter((i) => i.qc?.fidelity?.same_person && (i.annotation_count ?? 0) > 0);
 
   const advance = useCallback(() => {
     setSelectedId((current) => {
@@ -45,47 +52,83 @@ export default function ReviewPage({ projectId }: { projectId: string }) {
     if (!items.some((i) => i.id === selectedId)) setSelectedId(items[0]?.id ?? null);
   }, [items, selectedId]);
 
+  // La tira sigue a la imagen seleccionada.
+  useEffect(() => {
+    document.querySelector(`[data-strip="${selectedId}"]`)?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+  }, [selectedId]);
+
   return (
     <>
       <PageHead
         title="Etiquetas"
-        sub="Las etiquetas automáticas son candidatas. Solo lo que apruebas aquí se exporta, y las reales aprobadas son la verdad de referencia del experimento."
+        sub="Revisa cada caja. Solo lo que apruebas se exporta, y las reales aprobadas son la verdad de referencia del experimento."
         actions={
           <>
-            <select aria-label="Origen" value={origin} onChange={(e) => setOrigin(e.target.value as Origin)} style={{ width: 150 }}>
-              <option value="real">Reales</option>
-              <option value="synthetic">Sintéticas</option>
-            </select>
-            <button className="btn" disabled={busy} onClick={() => run(() => post(`/projects/${projectId}/label`), "Etiquetado en cola")}>Etiquetar pendientes{pending ? ` (${pending})` : ""}</button>
-            {status === "candidate" && items.length > 0 && <button className="btn btn-primary" disabled={busy} onClick={() => setBulk(true)}>Aprobar candidatas</button>}
+            <Segmented label="Origen" value={origin} onChange={setOrigin} options={[{ value: "real", label: "Reales" }, { value: "synthetic", label: "Sintéticas" }]} />
+            <button className="btn" disabled={busy} onClick={() => run(() => post(`/projects/${projectId}/label`), "Etiquetado en cola")}>
+              <ScanSearch size={15} /> Etiquetar pendientes{pending ? ` (${pending})` : ""}
+            </button>
           </>
         }
       />
-      <Tabs value={status} onChange={setStatus} options={FILTERS.map((f) => ({ value: f.value, label: f.label, count: counts[f.value] ?? 0 }))} />
-      {selectedId && project?.classes && <Inspector key={selectedId} imageId={selectedId} classes={project.classes} onDone={advance} />}
-      <div style={{ marginTop: 16 }}>
-        <Card
-          title={`${data?.total ?? 0} imágenes`}
-          actions={origin === "synthetic" ? (
-            <select aria-label="Orden" value={sort} onChange={(e) => setSort(e.target.value as "recent" | "fidelity")} style={{ width: 180 }}>
+
+      <div className="review-progress card" style={{ padding: "14px 18px" }}>
+        <strong className="mono" style={{ fontSize: 18 }}><CountUp value={decided} /> <span className="faint">de {totalOrigin}</span></strong>
+        <Progress value={decided} total={Math.max(totalOrigin, 1)} />
+        <span className="faint">{origin === "real" ? "reales verificadas" : "sintéticas decididas"}</span>
+      </div>
+
+      <div className="row-between" style={{ marginBottom: 4 }}>
+        <Tabs value={status} onChange={setStatus} options={FILTERS.map((f) => ({ value: f.value, label: f.label, count: counts[f.value] ?? 0 }))} />
+        <div className="row">
+          {origin === "synthetic" && (
+            <select aria-label="Orden" value={sort} onChange={(e) => setSort(e.target.value as "recent" | "fidelity")} style={{ width: 200 }}>
               <option value="recent">Más recientes</option>
               <option value="fidelity">Mayor parecido primero</option>
             </select>
-          ) : undefined}
-        >
-          {items.length
-            ? <div className="gallery">{items.map((i) => <Thumb key={i.id} image={i} selected={i.id === selectedId} onClick={() => setSelectedId(i.id)} />)}</div>
-            : <Empty title="Nada por aquí">{pending ? `Hay ${pending} imágenes pendientes de etiquetar.` : "No hay imágenes en este estado."}</Empty>}
-        </Card>
+          )}
+          {status === "candidate" && items.length > 0 && <button className="btn btn-small" disabled={busy} onClick={() => setBulk("candidates")}>Aprobar todas las candidatas</button>}
+          {origin === "synthetic" && status !== "approved" && similar.length > 0 && (
+            <button className="btn btn-small btn-primary" disabled={busy} onClick={() => setBulk("similar")}>Aprobar {similar.length} con parecido ≥ {THRESHOLD}</button>
+          )}
+        </div>
       </div>
-      {bulk && (
+
+      {items.length > 0 && (
+        <div className="filmstrip" role="listbox" aria-label="Imágenes en este estado">
+          {items.map((i, n) => (
+            <div key={i.id} data-strip={i.id}><Thumb image={i} compact index={n} selected={i.id === selectedId} onClick={() => setSelectedId(i.id)} /></div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ marginTop: 12 }}>
+        {selectedId && project?.classes
+          ? <Inspector key={selectedId} imageId={selectedId} classes={project.classes} onDone={advance} />
+          : <Empty title="Nada por revisar aquí">{pending ? `Hay ${pending} imágenes esperando el etiquetado automático.` : "Cambia de estado u origen para ver otras imágenes."}</Empty>}
+      </div>
+
+      {bulk === "candidates" && (
         <Confirm
           title="Aprobar candidatas" action={`Aprobar ${counts.candidate ?? 0}`}
           body="Las candidatas superaron el umbral de confianza y no tienen avisos, pero aprobarlas sin verlas es aceptar el criterio automático. Revisa una muestra antes si son para el experimento."
-          onClose={() => setBulk(false)}
+          onClose={() => setBulk(null)}
           onConfirm={async () => {
-            setBulk(false);
+            setBulk(null);
             await run(() => post<{ changed: number }>(`/projects/${projectId}/review/bulk`, { from_status: "candidate", origin, status: "approved" }), "Candidatas aprobadas");
+            refresh();
+            reloadProject();
+          }}
+        />
+      )}
+      {bulk === "similar" && (
+        <Confirm
+          title="Aprobar por parecido" action={`Aprobar ${similar.length}`}
+          body={<>Se aprobarán las {similar.length} imágenes visibles cuyo rostro supera {THRESHOLD} de parecido con tus fotos de entrenamiento y que tienen caja. El parecido es una medida, no una verificación: revisa las cajas de una muestra.</>}
+          onClose={() => setBulk(null)}
+          onConfirm={async () => {
+            setBulk(null);
+            await run(() => post(`/projects/${projectId}/review/bulk`, { ids: similar.map((i) => i.id), origin, status: "approved" }), "Imágenes aprobadas");
             refresh();
             reloadProject();
           }}
@@ -155,6 +198,7 @@ function Inspector({ imageId, classes, onDone }: { imageId: string; classes: Kla
 
   return (
     <div className="inspector">
+      <div className="canvas-stage">
       <BoxCanvas
         image={image} boxes={boxes} selected={selected} drawing={drawing} classes={classes}
         onSelect={setSelected}
@@ -166,6 +210,7 @@ function Inspector({ imageId, classes, onDone }: { imageId: string; classes: Kla
           setSelected(boxes.length);
         }}
       />
+      </div>
       <div className="stack">
         <Card>
           <div className="stack">
@@ -206,13 +251,17 @@ function Inspector({ imageId, classes, onDone }: { imageId: string; classes: Kla
           ) : <p className="muted">Sin cajas. Dibuja una, o aprueba si la imagen de verdad no contiene la clase.</p>}
         </Card>
         {image.qc?.fidelity && (
-          <Card title="Parecido al sujeto" note="Contra las imágenes reales de train. Es una medida, no una verificación.">
-            <dl className="meta-list">
-              {image.qc.fidelity.face != null
-                ? <><dt>Rostro</dt><dd className="mono">{image.qc.fidelity.face.toFixed(2)} {image.qc.fidelity.same_person ? "(misma persona)" : "(no coincide)"}</dd></>
-                : <><dt>Rostro</dt><dd>No se detectó</dd></>}
-              <dt>Visual (CLIP)</dt><dd className="mono">{image.qc.fidelity.clip.toFixed(2)}</dd>
-            </dl>
+          <Card title="Parecido al sujeto" note="Contra tus fotos reales de entrenamiento. Es una medida, no una verificación.">
+            {image.qc.fidelity.face != null ? (
+              <div className="stack-sm">
+                <div className="row-between">
+                  <span className="mono" style={{ fontSize: 22 }}>{image.qc.fidelity.face.toFixed(2)}</span>
+                  <span className={`pill ${image.qc.fidelity.same_person ? "pill-good" : "pill-warn"}`}>{image.qc.fidelity.same_person ? "Coincide con el sujeto" : "No coincide"}</span>
+                </div>
+                <FidelityScale value={image.qc.fidelity.face} threshold={THRESHOLD} />
+                <span className="faint">Parecido visual general (CLIP): {image.qc.fidelity.clip.toFixed(2)}</span>
+              </div>
+            ) : <p className="muted">No se detectó un rostro. Parecido visual (CLIP): {image.qc.fidelity.clip.toFixed(2)}</p>}
           </Card>
         )}
         {image.generation && (
@@ -247,7 +296,9 @@ function BoxCanvas({ image, boxes, selected, drawing, classes, onSelect, onChang
   const ref = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const drag = useRef<{ mode: "move" | "resize"; index: number; startX: number; startY: number; box: Box } | null>(null);
-  const color = image.origin === "real" ? "var(--real)" : "var(--synth)";
+  const color = image.origin === "real" ? "var(--real-fill)" : "var(--synth-fill)";
+  const [sweep, setSweep] = useState(true);
+  useEffect(() => { const t = setTimeout(() => setSweep(false), 700); return () => clearTimeout(t); }, []);
   const className = useMemo(() => Object.fromEntries(classes.map((c) => [c.id, c.name])), [classes]);
 
   const point = (e: React.PointerEvent) => {
@@ -289,7 +340,7 @@ function BoxCanvas({ image, boxes, selected, drawing, classes, onSelect, onChang
   return (
     <div
       ref={ref} className="canvas-wrap"
-      style={{ cursor: drawing ? "crosshair" : "default", width: `min(100%, calc((100vh - 250px) * ${image.width / image.height}))`, justifySelf: "center" }}
+      style={{ cursor: drawing ? "crosshair" : "default", width: `min(100%, calc((100vh - 300px) * ${image.width / image.height}))` }}
       onPointerDown={(e) => {
         if (drawing) {
           const p = point(e);
@@ -303,6 +354,9 @@ function BoxCanvas({ image, boxes, selected, drawing, classes, onSelect, onChang
       onPointerUp={onPointerUp}
     >
       <img src={image.file_url} alt={image.filename} draggable={false} />
+      {sweep && boxes.map((b, i) => (
+        <span key={`s${i}`} className="box-sweep" aria-hidden style={{ ["--sweep" as string]: color, left: `${(b.cx - b.w / 2) * 100}%`, top: `${(b.cy - b.h / 2) * 100}%`, width: `${b.w * 100}%`, height: `${b.h * 100}%`, animationDelay: `${i * 80}ms` }} />
+      ))}
       <svg viewBox="0 0 1 1" preserveAspectRatio="none">
         {boxes.map((b, i) => b.polygon && (
           <polygon key={`p${i}`} className="anno-poly" fill={color} points={b.polygon.reduce((acc, v, k) => acc + (k % 2 ? `,${v} ` : `${v}`), "")} />
@@ -340,7 +394,7 @@ function BoxCanvas({ image, boxes, selected, drawing, classes, onSelect, onChang
         <span
           role="slider" aria-label="Cambiar tamaño de la caja" tabIndex={0}
           style={{
-            position: "absolute", width: 12, height: 12, background: "#fff", border: "1px solid #14171B", cursor: "nwse-resize",
+            position: "absolute", width: 14, height: 14, background: "#fff", border: "2px solid #0E1121", borderRadius: 4, cursor: "nwse-resize",
             left: `calc(${(boxes[selected].cx + boxes[selected].w / 2) * 100}% - 6px)`,
             top: `calc(${(boxes[selected].cy + boxes[selected].h / 2) * 100}% - 6px)`,
           }}

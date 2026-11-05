@@ -1,4 +1,4 @@
-"""Galeria, archivos de imagen, anotaciones y revision humana."""
+"""Galeria, archivos de imagen, anotaciones y revisión humana."""
 from __future__ import annotations
 
 from typing import List, Optional
@@ -12,7 +12,7 @@ from .. import db, jobs
 from ..services import labeling, provenance, storage
 from .projects import project_or_404
 
-router = APIRouter(tags=["revision"])
+router = APIRouter(tags=["revisión"])
 
 
 class BoxIn(BaseModel):
@@ -109,7 +109,7 @@ def image_file(image_id: str, variant: str = Query("full", pattern="^(full|thumb
     key = {"full": "normalized_path", "thumb": "thumb_path", "original": "path"}[variant]
     path = storage.resolve(image[key])
     if not path.exists():
-        raise HTTPException(404, "El archivo no esta en disco")
+        raise HTTPException(404, "El archivo no está en disco")
     return FileResponse(path, headers={"Cache-Control": "public, max-age=604800, immutable"})
 
 
@@ -148,7 +148,7 @@ def review_image(image_id: str, body: ReviewIn):
 
 @router.post("/projects/{project_id}/review/bulk")
 def review_bulk(project_id: str, body: BulkReviewIn):
-    """Aprobar en lote solo actua sobre imagenes con cajas: un negativo exige revision individual."""
+    """Aprobar en lote solo actua sobre imágenes con cajas: un negativo exige revisión individual."""
     project_or_404(project_id)
     where, args = ["project_id=?", "origin=?"], [project_id, body.origin]
     if body.ids:

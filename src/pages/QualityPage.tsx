@@ -1,7 +1,8 @@
-import { get, post } from "../lib/api";
+import { Project, get, post } from "../lib/api";
 import { formatDate, usePoll } from "../lib/hooks";
 import { BarList } from "../ui/charts";
-import { Card, Empty, Notice, PageHead, Stat, useAction } from "../ui/kit";
+import { Gauge } from "lucide-react";
+import { Card, Empty, FidelityScale, Notice, PageHead, Requirements, Stat, useAction } from "../ui/kit";
 
 interface ReportRow { id: string; status: string; job_status: string; job_error: string | null; created_at: number; report: any }
 
@@ -18,7 +19,14 @@ function Metric({ name, value, meaning, limit }: { name: string; value: string |
 
 export default function QualityPage({ projectId }: { projectId: string }) {
   const { data: reports, refresh } = usePoll(() => get<ReportRow[]>(`/projects/${projectId}/quality`), 4000, [projectId]);
+  const { data: project } = usePoll(() => get<Project>(`/projects/${projectId}`), 10000, [projectId]);
   const { busy, run } = useAction();
+  const pl = project?.pipeline;
+  const labeledSynth = pl ? pl.synthetic_images - (pl.by_status.synthetic.pending ?? 0) - (pl.by_status.synthetic.rejected ?? 0) : 0;
+  const requirements = [
+    { ok: (pl?.by_split.train ?? 0) >= 2, text: `${pl?.by_split.train ?? 0} reales en entrenamiento (mínimo 2)`, to: `/p/${projectId}/dataset`, action: "Ir a dataset" },
+    { ok: labeledSynth >= 2, text: `${labeledSynth} sintéticas etiquetadas (mínimo 2)`, to: `/p/${projectId}/generate`, action: "Generar" },
+  ];
   const running = reports?.find((r) => r.status === "running" && (r.job_status === "running" || r.job_status === "queued"));
   const failed = reports?.[0]?.job_status === "failed" ? reports[0] : null;
   const latest = reports?.find((r) => r.status === "ready");
@@ -29,10 +37,15 @@ export default function QualityPage({ projectId }: { projectId: string }) {
       <PageHead
         title="Calidad"
         sub="Compara lo sintético con el split de entrenamiento real, nunca con val ni test. Ninguna métrica prueba por sí sola que una imagen sirva: la prueba final es el experimento."
-        actions={<button className="btn btn-primary" disabled={busy || !!running} onClick={() => run(() => post(`/projects/${projectId}/quality`), "Evaluación en cola").then(refresh)}>{running ? "Evaluando..." : "Evaluar ahora"}</button>}
+        actions={<button className="btn btn-primary" disabled={busy || !!running || requirements.some((r) => !r.ok)} onClick={() => run(() => post(`/projects/${projectId}/quality`), "Evaluación en cola").then(refresh)}><Gauge size={16} /> {running ? "Evaluando..." : "Evaluar ahora"}</button>}
       />
       {failed && <div style={{ marginBottom: 16 }}><Notice kind="bad" title="La última evaluación falló">{failed.job_error}</Notice></div>}
-      {!r && !running && !failed && <Empty title="Sin evaluaciones">Genera imágenes y evalúalas para ver estas métricas.</Empty>}
+      {!r && !running && !failed && (
+        <div className="grid grid-2">
+          <Empty title="Aún no hay evaluaciones">Verás cuánto se parecen tus imágenes al sujeto, si cubren la variedad de lo real, cuántas se repiten y qué artefactos tienen. Cada métrica viene con lo que mide y sus límites.</Empty>
+          <Card title="Para evaluar"><Requirements items={requirements} /></Card>
+        </div>
+      )}
       {r && (
         <div className="stack">
           <div className="row-between">
@@ -52,6 +65,7 @@ export default function QualityPage({ projectId }: { projectId: string }) {
                 <Stat value={r.fidelity.clip_mean ?? "—"} label="Parecido visual medio (CLIP)" />
                 <Stat value={`${r.fidelity.face_found} / ${r.fidelity.images}`} label="Con rostro detectado" />
               </div>
+              {r.fidelity.face_mean != null && <div style={{ marginTop: 14 }}><FidelityScale value={r.fidelity.face_mean} threshold={r.fidelity.threshold} baseline={r.fidelity.real_baseline} /></div>}
               <p className="faint" style={{ marginTop: 10 }}>Límite: el umbral se calibró con una muestra pequeña, y el parecido facial no aplica a objetos. Para objetos usa CLIP junto con la inspección visual.</p>
             </Card>
           )}

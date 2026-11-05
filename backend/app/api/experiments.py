@@ -1,4 +1,4 @@
-"""Experimento comparativo real contra real + sintetico."""
+"""Experimento comparativo real contra real + sintético."""
 from __future__ import annotations
 
 from typing import List
@@ -43,9 +43,9 @@ def start_experiment(project_id: str, body: ExperimentIn):
     project_or_404(project_id)
     names = [c.name for c in body.conditions]
     if len(set(names)) != len(names):
-        raise HTTPException(422, "Los nombres de condicion deben ser unicos")
+        raise HTTPException(422, "Los nombres de condición deben ser únicos")
     if body.baseline not in names:
-        raise HTTPException(422, "La condicion base no existe")
+        raise HTTPException(422, "La condición base no existe")
     config = body.model_dump()
     check = service.preflight(project_id, config["conditions"])
     if not check["ok"]:

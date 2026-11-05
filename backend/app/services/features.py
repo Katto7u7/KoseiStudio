@@ -1,7 +1,7 @@
 """Extractor de caracteristicas. Cada salida tiene un uso concreto:
 
 - Captions BLIP: guia semantica del entrenamiento del LoRA.
-- Embeddings CLIP: casi duplicados semanticos, similitud sintetico-real y mapa de cobertura.
+- Embeddings CLIP: casi duplicados semanticos, similitud sintético-real y mapa de cobertura.
 - Medidas de imagen: control de calidad, ya calculadas al importar.
 """
 from __future__ import annotations
@@ -75,7 +75,7 @@ def caption_image(path: Path) -> str:
 
 @register("caption", "cpu")
 def run_captions(ctx: JobContext) -> dict[str, Any]:
-    """Solo describe el split de entrenamiento: es el unico que ve el LoRA."""
+    """Solo describe el split de entrenamiento: es el único que ve el LoRA."""
     overwrite = bool(ctx.params.get("overwrite"))
     token = (ctx.params.get("token") or "").strip()
     images = db.query(
@@ -84,7 +84,7 @@ def run_captions(ctx: JobContext) -> dict[str, Any]:
         [ctx.project_id],
     )
     if not images:
-        raise ValueError("Primero define la particion: las captions se generan solo para train")
+        raise ValueError("Primero define la partición: las captions se generan solo para train")
     if not overwrite:
         images = [i for i in images if not i["caption"]]
     for n, image in enumerate(images, 1):
@@ -170,7 +170,7 @@ def run_features(ctx: JobContext) -> dict[str, Any]:
         [ctx.project_id],
     )
     if not images:
-        raise ValueError("El proyecto no tiene imagenes")
+        raise ValueError("El proyecto no tiene imágenes")
     known = embed_images(ctx, images)
     ids = [i["id"] for i in images]
     matrix = np.stack([known[i] for i in ids])

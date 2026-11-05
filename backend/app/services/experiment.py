@@ -35,7 +35,7 @@ def preflight(project_id: str, conditions: list[dict[str, Any]]) -> dict[str, An
     project = db.one("SELECT * FROM projects WHERE id=?", [project_id])
     problems: list[str] = []
     if not project["split_locked_at"]:
-        problems.append("La particion debe estar bloqueada antes de experimentar")
+        problems.append("La partición debe estar bloqueada antes de experimentar")
     counts = {
         s: int(db.scalar(
             "SELECT COUNT(*) FROM images WHERE project_id=? AND origin='real' AND split=? AND status='approved'",
@@ -48,16 +48,16 @@ def preflight(project_id: str, conditions: list[dict[str, Any]]) -> dict[str, An
         [project_id],
     ))
     if unverified:
-        problems.append(f"{unverified} imagenes de val o test sin aprobar: son la verdad de referencia")
+        problems.append(f"{unverified} imágenes de val o test sin aprobar: son la verdad de referencia")
     if not counts["val"] or not counts["test"]:
-        problems.append("Faltan imagenes aprobadas en val o test")
+        problems.append("Faltan imágenes aprobadas en val o test")
     synth_available = int(db.scalar(
         "SELECT COUNT(*) FROM images WHERE project_id=? AND origin='synthetic' AND status='approved'",
         [project_id],
     ))
     needed = max((int(c.get("n_synthetic") or 0) for c in conditions), default=0)
     if needed > synth_available:
-        problems.append(f"Se piden {needed} sinteticas y hay {synth_available} aprobadas")
+        problems.append(f"Se piden {needed} sintéticas y hay {synth_available} aprobadas")
 
     protected = {
         r["sha256"] for r in db.query(
@@ -72,9 +72,9 @@ def preflight(project_id: str, conditions: list[dict[str, Any]]) -> dict[str, An
         )
     }
     if protected & train_real:
-        problems.append("Hay imagenes compartidas entre train y val/test")
+        problems.append("Hay imágenes compartidas entre train y val/test")
 
-    # El LoRA de cada sintetica aprobada no puede haber visto val ni test.
+    # El LoRA de cada sintética aprobada no puede haber visto val ni test.
     lora_ids = [
         r["lora_id"] for r in db.query(
             "SELECT DISTINCT lora_id FROM images WHERE project_id=? AND origin='synthetic' AND status='approved'",
@@ -91,17 +91,17 @@ def preflight(project_id: str, conditions: list[dict[str, Any]]) -> dict[str, An
         if lora["origin"] == "external" or not lora["train_hashes"]:
             unverifiable.append(lora["name"])
         elif protected & set(lora["train_hashes"]):
-            problems.append(f"El LoRA {lora['name']} se entreno con imagenes de val o test")
+            problems.append(f"El LoRA {lora['name']} se entreno con imágenes de val o test")
     warnings = []
     if unverifiable:
         warnings.append("Linaje no verificable en: " + ", ".join(unverifiable) + ". No se puede descartar fuga de datos.")
     if counts["test"] < 30:
-        warnings.append(f"Solo {counts['test']} imagenes de prueba: la incertidumbre es alta.")
+        warnings.append(f"Solo {counts['test']} imágenes de prueba: la incertidumbre es alta.")
     return {"ok": not problems, "problems": problems, "warnings": warnings, "counts": counts, "synthetic_approved": synth_available}
 
 
 def summarize(runs: list[dict[str, Any]], baseline: str) -> dict[str, Any]:
-    """Media, desviacion y comparacion pareada por seed contra la condicion base."""
+    """Media, desviacion y comparacion pareada por seed contra la condición base."""
     done = [r for r in runs if r["status"] == "succeeded" and r["metrics"]]
     conditions: dict[str, Any] = {}
     for name in sorted({r["condition"] for r in done}):
@@ -181,12 +181,12 @@ def run_experiment(ctx: JobContext) -> dict[str, Any]:
             if run_dir.exists():
                 shutil.rmtree(run_dir)
 
-            # Las sinteticas se eligen con una seed propia del experimento: subconjuntos anidados.
+            # Las sintéticas se eligen con una seed propia del experimento: subconjuntos anidados.
             selection = export.select_images(project_id, int(condition.get("n_synthetic") or 0), int(config_.get("selection_seed", 0)))
             if not condition.get("use_real", True):
                 selection["train"] = [i for i in selection["train"] if i["origin"] == "synthetic"]
             if not selection["train"]:
-                raise ValueError(f"La condicion {condition['name']} quedo sin imagenes de train")
+                raise ValueError(f"La condición {condition['name']} quedo sin imágenes de train")
             written = export.write_tree(run_dir / "data", selection, classes, ["detect"], ctx)
             counts = written["counts"]["detect"]
             values = {
@@ -208,7 +208,7 @@ def run_experiment(ctx: JobContext) -> dict[str, Any]:
             cfg_path.write_text(json.dumps(job_cfg), encoding="utf-8")
 
             def on_epoch(epoch: int, base: int = finished, name: str = condition["name"], s: int = seed) -> None:
-                ctx.progress(base + epoch, total, f"{name}, seed {s}: epoca {epoch} de {epochs}")
+                ctx.progress(base + epoch, total, f"{name}, seed {s}: época {epoch} de {epochs}")
 
             metrics = _run_worker(ctx, cfg_path, run_dir / "metrics.json", on_epoch)
             db.update("experiment_runs", run_id, {"status": "succeeded", "metrics": metrics})
@@ -261,5 +261,5 @@ def _run_worker(ctx: JobContext, cfg_path: Path, metrics_path: Path, on_epoch) -
     if ctx.cancelled():
         raise Cancelled()
     if code != 0 or not metrics_path.exists():
-        raise RuntimeError(f"La corrida fallo (codigo {code}):\n" + "\n".join(tail[-10:]))
+        raise RuntimeError(f"La corrida fallo (código {code}):\n" + "\n".join(tail[-10:]))
     return json.loads(metrics_path.read_text(encoding="utf-8"))

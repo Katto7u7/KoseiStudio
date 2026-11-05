@@ -67,7 +67,7 @@ def save_thumb(image: Image.Image, path: Path, max_side: int = 384) -> None:
 
 
 def phash(image: Image.Image) -> str:
-    """pHash DCT de 64 bits: detecta casi duplicados aunque cambie el formato o el tamano."""
+    """pHash DCT de 64 bits: detecta casi duplicados aunque cambie el formato o el tamaño."""
     gray = np.asarray(image.convert("L").resize((32, 32), Image.Resampling.LANCZOS), dtype=np.float32)
     low = cv2.dct(gray)[:8, :8]
     bits = (low > np.median(low[1:, 1:])).flatten()

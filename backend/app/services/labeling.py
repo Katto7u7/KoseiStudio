@@ -1,6 +1,6 @@
-"""Etiquetado automatico: clase por condicionamiento, deteccion YOLO, mascara SAM.
+"""Etiquetado automatico: clase por condicionamiento, detección YOLO, máscara SAM.
 
-Corre en CPU para no competir por VRAM con el motor de generacion. Las etiquetas que
+Corre en CPU para no competir por VRAM con el motor de generación. Las etiquetas que
 produce son candidatas: solo pasan a verificadas cuando una persona las aprueba.
 """
 from __future__ import annotations
@@ -95,7 +95,7 @@ def detect(image_path: Path, cls: dict[str, Any]) -> tuple[list[dict[str, Any]],
 
 
 def mask_to_polygon(mask: np.ndarray, max_points: int = 80) -> Optional[list[float]]:
-    """Contorno exterior mayor de una mascara, como poligono YOLO normalizado."""
+    """Contorno exterior mayor de una máscara, como poligono YOLO normalizado."""
     binary = (np.asarray(mask) > 0.5).astype(np.uint8)
     height, width = binary.shape[:2]
     contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -136,7 +136,7 @@ def segment(image_path: Path, boxes: list[dict[str, Any]], width: int, height: i
 
 
 def decide_status(boxes: list[dict[str, Any]], polygons: list[Optional[list[float]]], flags: list[str]) -> tuple[str, list[str]]:
-    """Reglas de aceptacion. Nada se aprueba solo: `candidate` aun exige revision o aprobacion en lote."""
+    """Reglas de aceptacion. Nada se aprueba solo: `candidate` aun exige revisión o aprobación en lote."""
     if not boxes:
         return "no_detection", ["sin detecciones de la clase"]
     reasons: list[str] = []
@@ -145,11 +145,11 @@ def decide_status(boxes: list[dict[str, Any]], polygons: list[Optional[list[floa
     if len(boxes) > 1:
         reasons.append(f"{len(boxes)} instancias detectadas")
     if any(b["w"] * b["h"] < 0.01 for b in boxes):
-        reasons.append("caja muy pequena")
+        reasons.append("caja muy pequeña")
     if any(b["w"] * b["h"] > 0.97 for b in boxes):
         reasons.append("caja ocupa toda la imagen")
     if any(p is None for p in polygons):
-        reasons.append("sin mascara valida")
+        reasons.append("sin máscara valida")
     reasons += [f"imagen {f}" for f in flags]
     return ("needs_review" if reasons else "candidate"), reasons
 
@@ -203,9 +203,16 @@ def label_image(image: dict[str, Any], classes: list[dict[str, Any]]) -> str:
 
 
 def ensure_label_job(project_id: str) -> Optional[str]:
-    """Una sola tarea de etiquetado por proyecto; se encarga de todo lo pendiente."""
-    active = jobs.active_job(project_id, "label")
-    return active["id"] if active else jobs.enqueue("label", project_id, {})
+    """Garantiza que lo pendiente se etiquete.
+
+    Solo se reutiliza una tarea que aun no empezo: una en curso puede estar terminando justo
+    cuando llega una imagen nueva, y esa imagen quedaria pendiente sin nadie que la procese.
+    """
+    queued = db.one(
+        "SELECT id FROM jobs WHERE kind='label' AND status='queued' AND project_id=? ORDER BY created_at LIMIT 1",
+        [project_id],
+    )
+    return queued["id"] if queued else jobs.enqueue("label", project_id, {})
 
 
 @register("label", "cpu")
@@ -251,7 +258,7 @@ def annotations_for(image_id: str) -> list[dict[str, Any]]:
 
 
 def set_boxes(image: dict[str, Any], boxes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Guarda la correccion humana. SAM recalcula la mascara de cada caja corregida."""
+    """Guarda la correccion humana. SAM recalcula la máscara de cada caja corregida."""
     path = storage.resolve(image["normalized_path"])
     polygons = segment(path, boxes, image["width"], image["height"])
     with db.transaction():

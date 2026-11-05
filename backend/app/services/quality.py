@@ -1,7 +1,7 @@
-"""Evaluacion de las imagenes sinteticas contra el split de entrenamiento real.
+"""Evaluación de las imágenes sintéticas contra el split de entrenamiento real.
 
-Nunca usa val ni test. Ninguna metrica se presenta como prueba unica de calidad: cada
-una viene con lo que mide y con avisos cuando el tamano de muestra no la sostiene.
+Nunca usa val ni test. Ninguna métrica se presenta como prueba única de calidad: cada
+una viene con lo que mide y con avisos cuando el tamaño de muestra no la sostiene.
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def _inception_scores(ctx: JobContext, real: list[dict], synth: list[dict]) -> d
             kid.update(tensor, real=is_real)
 
     feed(real, True, "reales")
-    feed(synth, False, "sinteticas")
+    feed(synth, False, "sintéticas")
     kid_mean, kid_std = kid.compute()
     return {
         "fid": round(float(fid.compute()), 3),
@@ -99,16 +99,16 @@ def run_quality(ctx: JobContext) -> dict[str, Any]:
         [project_id],
     )
     if len(real) < 2 or len(synth) < 2:
-        raise ValueError("Se necesitan al menos 2 imagenes reales en train y 2 sinteticas")
+        raise ValueError("Se necesitan al menos 2 imágenes reales en train y 2 sintéticas")
 
     warnings: list[str] = []
     if min(len(real), len(synth)) < MIN_FID_SAMPLES:
         warnings.append(
-            f"FID con {len(real)} reales y {len(synth)} sinteticas no es fiable: se recomiendan "
-            f"{MIN_FID_SAMPLES} o mas por grupo. Usalo solo para comparar corridas de igual tamano; KID es menos sesgado."
+            f"FID con {len(real)} reales y {len(synth)} sintéticas no es fiable: se recomiendan "
+            f"{MIN_FID_SAMPLES} o mas por grupo. Usalo solo para comparar corridas de igual tamaño; KID es menos sesgado."
         )
     if len(real) < 50:
-        warnings.append("Con menos de 50 imagenes reales, precision y recall tienen alta varianza.")
+        warnings.append("Con menos de 50 imágenes reales, precisión y recall tienen alta varianza.")
 
     scores = _inception_scores(ctx, real, synth)
     known = features.embed_images(ctx, real + synth)
@@ -132,7 +132,7 @@ def run_quality(ctx: JobContext) -> dict[str, Any]:
     nearest = (synth_v @ real_v.T).max(axis=1)
     memorized = int((nearest > 0.98).sum())
     if memorized:
-        warnings.append(f"{memorized} sinteticas son casi identicas a una real de entrenamiento: posible memorizacion del LoRA.")
+        warnings.append(f"{memorized} sintéticas son casi identicas a una real de entrenamiento: posible memorización del LoRA.")
 
     phashes = [s["phash"] for s in synth]
     near_duplicates = sum(

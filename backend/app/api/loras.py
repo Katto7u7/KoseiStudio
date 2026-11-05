@@ -111,16 +111,16 @@ def promote_lora(lora_id: str, body: PromoteIn):
 
 @router.delete("/loras/{lora_id}", status_code=204)
 def delete_lora(lora_id: str):
-    """Solo LoRAs entrenados aqui y sin imagenes generadas: los externos son del usuario."""
+    """Solo LoRAs entrenados aqui y sin imágenes generadas: los externos son del usuario."""
     lora = db.one("SELECT * FROM loras WHERE id=?", [lora_id])
     if not lora:
         raise HTTPException(404, "LoRA no encontrado")
     if lora["origin"] != "trained":
-        raise HTTPException(409, "Solo se pueden eliminar los LoRAs entrenados en la aplicacion")
+        raise HTTPException(409, "Solo se pueden eliminar los LoRAs entrenados en la aplicación")
     if lora["status"] in ("queued", "training"):
-        raise HTTPException(409, "El LoRA se esta entrenando")
+        raise HTTPException(409, "El LoRA se está entrenando")
     if db.scalar("SELECT COUNT(*) FROM images WHERE lora_id=?", [lora_id]):
-        raise HTTPException(409, "Este LoRA ya genero imagenes: eliminarlo romperia su procedencia")
+        raise HTTPException(409, "Este LoRA ya genero imágenes: eliminarlo romperia su procedencia")
     (config.LORA_DIR / f"{lora['name']}.safetensors").unlink(missing_ok=True)
     if lora["project_id"]:
         storage.remove_tree(storage.project_dir(lora["project_id"]) / "loras" / lora_id)
@@ -135,7 +135,7 @@ def delete_lora(lora_id: str):
 def train_lora(project_id: str, body: TrainIn):
     project = project_or_404(project_id)
     if not project["split_locked_at"]:
-        raise HTTPException(409, "Bloquea la particion primero: garantiza que el LoRA no vea val ni test")
+        raise HTTPException(409, "Bloquea la partición primero: garantiza que el LoRA no vea val ni test")
     if db.one("SELECT 1 FROM loras WHERE name=?", [body.name]) or (config.LORA_DIR / f"{body.name}.safetensors").exists():
         raise HTTPException(409, f"Ya existe un LoRA llamado {body.name}")
     train_images = db.scalar(
@@ -143,7 +143,7 @@ def train_lora(project_id: str, body: TrainIn):
         [project_id],
     )
     if not train_images:
-        raise HTTPException(409, "No hay imagenes en el split de entrenamiento")
+        raise HTTPException(409, "No hay imágenes en el split de entrenamiento")
 
     name = body.checkpoint.split(" [")[0]
     path = (config.CHECKPOINT_DIR / name).resolve()
@@ -175,7 +175,7 @@ async def import_lora(project_id: str, file: UploadFile = File(...), token: str 
     project_or_404(project_id)
     name = storage.safe_filename(file.filename or "lora.safetensors")
     if not name.endswith(".safetensors"):
-        raise HTTPException(422, "Solo se admite .safetensors: un .ckpt puede ejecutar codigo al cargarse")
+        raise HTTPException(422, "Solo se admite .safetensors: un .ckpt puede ejecutar código al cargarse")
     stem = name[: -len(".safetensors")]
     if not storage.LORA_NAME.match(stem):
         raise HTTPException(422, "Nombre de archivo no valido")

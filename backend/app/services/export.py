@@ -1,6 +1,6 @@
-"""Constructor reproducible del dataset extendido, con exportacion YOLO verificada.
+"""Constructor reproducible del dataset extendido, con exportación YOLO verificada.
 
-Reglas: las sinteticas solo entran a train; val y test son solo reales; solo se exporta
+Reglas: las sintéticas solo entran a train; val y test son solo reales; solo se exporta
 lo aprobado por una persona; y el ZIP se abre y se valida antes de darlo por bueno.
 """
 from __future__ import annotations
@@ -37,7 +37,7 @@ def _link(src: Path, dst: Path) -> None:
 
 
 def select_images(project_id: str, n_synthetic: Optional[int], seed: int) -> dict[str, list[dict[str, Any]]]:
-    """Real por particion y sinteticas aprobadas, con subconjuntos anidados segun la seed."""
+    """Real por partición y sintéticas aprobadas, con subconjuntos anidados según la seed."""
     real = db.query(
         "SELECT * FROM images WHERE project_id=? AND origin='real' AND status='approved' AND split IS NOT NULL ORDER BY sha256",
         [project_id],
@@ -157,11 +157,11 @@ def validate_zip(path: Path, tasks: list[str]) -> dict[str, Any]:
                 for line in zf.read(label).decode("utf-8").splitlines():
                     parsed = ingest.parse_yolo_line(line)
                     if parsed is None or parsed[0] >= n_classes:
-                        problems.append(f"Etiqueta invalida en {label}: {line[:60]}")
+                        problems.append(f"Etiqueta inválida en {label}: {line[:60]}")
                     elif task == "detect" and len(parsed[1]) != 4:
                         problems.append(f"Se esperaban 4 valores en {label}")
                     elif task == "segment" and len(parsed[1]) < 6:
-                        problems.append(f"Poligono invalido en {label}")
+                        problems.append(f"Poligono inválido en {label}")
                 checked += 1
     return {"ok": not problems, "checked_images": checked, "problems": problems[:50]}
 
@@ -179,20 +179,20 @@ def run_build(ctx: JobContext) -> dict[str, Any]:
     try:
         classes = db.query("SELECT * FROM classes WHERE project_id=? ORDER BY idx", [project_id])
         tasks = [t for t in p["tasks"] if t in TASKS]
-        ctx.progress(0, 3, "Seleccionando imagenes")
+        ctx.progress(0, 3, "Seleccionando imágenes")
         selection = select_images(project_id, p.get("n_synthetic"), int(p["seed"]))
         if not selection["train"]:
-            raise ValueError("No hay imagenes aprobadas para train")
+            raise ValueError("No hay imágenes aprobadas para train")
         if not selection["val"]:
-            raise ValueError("No hay imagenes reales aprobadas en val")
-        ctx.progress(1, 3, "Escribiendo imagenes y etiquetas")
+            raise ValueError("No hay imágenes reales aprobadas en val")
+        ctx.progress(1, 3, "Escribiendo imágenes y etiquetas")
         written = write_tree(tree, selection, classes, tasks, ctx)
         manifest = {
             "project": project["name"], "build_id": build_id, "name": p["name"], "created_at": db.now(),
             "config": {k: p[k] for k in ("n_synthetic", "seed", "tasks") if k in p},
             "split_hash": project["split_hash"],
             "classes": {c["idx"]: c["name"] for c in classes},
-            "rules": "Sinteticas solo en train. Val y test solo reales. Solo imagenes aprobadas por una persona.",
+            "rules": "Sintéticas solo en train. Val y test solo reales. Solo imágenes aprobadas por una persona.",
             "counts": written["counts"], "items": written["items"],
         }
         (tree / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -213,7 +213,7 @@ def run_build(ctx: JobContext) -> dict[str, Any]:
         status = "ready" if validation["ok"] else "invalid"
         db.update("builds", build_id, {"summary": summary, "status": status})
         if not validation["ok"]:
-            raise RuntimeError("La validacion del ZIP encontro problemas: " + "; ".join(validation["problems"][:5]))
+            raise RuntimeError("La validación del ZIP encontro problemas: " + "; ".join(validation["problems"][:5]))
         return summary
     except Exception:
         row = db.one("SELECT status FROM builds WHERE id=?", [build_id])

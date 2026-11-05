@@ -1,4 +1,4 @@
-"""Importacion, estadisticas, particion, captions y caracteristicas."""
+"""Importacion, estadisticas, partición, captions y caracteristicas."""
 from __future__ import annotations
 
 import shutil
@@ -31,7 +31,7 @@ class CaptionJobIn(BaseModel):
 async def import_files(project_id: str, files: List[UploadFile] = File(...)):
     project_or_404(project_id)
     if db.one("SELECT 1 FROM projects WHERE id=? AND split_locked_at IS NOT NULL", [project_id]):
-        raise HTTPException(409, "La particion esta bloqueada: importar ahora invalidaria el experimento")
+        raise HTTPException(409, "La partición está bloqueada: importar ahora invalidaria el experimento")
     upload_dir = config.TMP_DIR / f"upload_{db.new_id()}"
     upload_dir.mkdir(parents=True)
     total = 0
@@ -43,7 +43,7 @@ async def import_files(project_id: str, files: List[UploadFile] = File(...)):
                 while chunk := await upload.read(1 << 20):
                     total += len(chunk)
                     if total > config.MAX_UPLOAD_BYTES:
-                        raise HTTPException(413, "La carga supera el limite permitido")
+                        raise HTTPException(413, "La carga supera el límite permitido")
                     out.write(chunk)
     except Exception:
         shutil.rmtree(upload_dir, ignore_errors=True)

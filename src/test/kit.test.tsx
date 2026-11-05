@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError, ImageRow, Project, get, post } from "../lib/api";
 import { BarList, ConditionDots, LossChart } from "../ui/charts";
-import { Confirm, Progress, StatusPill, Thumb, ToastProvider, useAction } from "../ui/kit";
+import { Confirm, FidelityScale, Progress, Requirements, StatusPill, Thumb, ToastProvider, useAction } from "../ui/kit";
 import ProjectsPage from "../pages/ProjectsPage";
 import QualityPage from "../pages/QualityPage";
 import { STAGES, flowProgress } from "../ui/flow";
@@ -83,6 +83,22 @@ describe("piezas", () => {
   });
 });
 
+describe("requisitos y fidelidad", () => {
+  it("lo pendiente ofrece el camino para resolverlo y lo listo no", () => {
+    render(<MemoryRouter><Requirements items={[
+      { ok: true, text: "Partición bloqueada", to: "/a", action: "Ir" },
+      { ok: false, text: "Faltan aprobadas", to: "/p/x/review", action: "Revisar" },
+    ]} /></MemoryRouter>);
+    const links = screen.getAllByRole("link");
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute("href", "/p/x/review");
+  });
+  it("la escala de parecido marca valor, umbral y referencia", () => {
+    render(<FidelityScale value={0.54} threshold={0.45} baseline={0.67} />);
+    expect(screen.getByRole("img")).toHaveAttribute("aria-label", "Parecido 0.54, umbral 0.45, referencia 0.67");
+  });
+});
+
 describe("graficas", () => {
   it("BarList pinta filas reales", () => {
     render(<BarList rows={[["512x512", 4], ["768x768", 2]]} />);
@@ -108,6 +124,10 @@ describe("riel de etapas", () => {
     const p = { ...pipeline, split_locked: true, loras_ready: 1 };
     const done = STAGES.filter((s) => s.done(p)).map((s) => s.path);
     expect(done).toEqual(["dataset", "lora", "generate"]);
+  });
+  it("la linea del riel solo avanza por etapas consecutivas", () => {
+    expect(flowProgress({ ...pipeline, split_locked: true, loras_ready: 1 })).toBe(3);
+    expect(flowProgress({ ...pipeline, split_locked: false, loras_ready: 1 })).toBe(0);
   });
 });
 
@@ -142,7 +162,7 @@ describe("paginas", () => {
         labeling: { statuses: { approved: 3 }, no_detection_rate: 0, box_area_synthetic: {}, box_area_real: {} }, omitted: { inception_score: "No aplica." },
       },
     }] });
-    render(<ToastProvider><QualityPage projectId="p" /></ToastProvider>);
+    render(<ToastProvider><MemoryRouter><QualityPage projectId="p" /></MemoryRouter></ToastProvider>);
     expect(await screen.findByText("90.5")).toBeInTheDocument();
     expect(screen.getByText("FID no es fiable")).toBeInTheDocument();
     expect(screen.getByText(/muy sesgado/)).toBeInTheDocument();

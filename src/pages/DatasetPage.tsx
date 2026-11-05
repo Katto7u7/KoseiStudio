@@ -2,29 +2,33 @@ import { DragEvent, useEffect, useRef, useState } from "react";
 import { ImageRow, Job, Klass, Project, del, get, patch, post, upload } from "../lib/api";
 import { formatBytes, usePoll } from "../lib/hooks";
 import { BarList, FeatureMap } from "../ui/charts";
-import { Card, Confirm, Empty, Field, Notice, PageHead, Stat, Tabs, Thumb, useAction, useToast } from "../ui/kit";
+import { Card, Confirm, Empty, Field, Notice, PageHead, SkeletonPage, Stat, Stepper, Thumb, splitLabel, useAction, useToast } from "../ui/kit";
 
 type Tab = "images" | "analysis" | "split" | "captions" | "classes";
 
 export default function DatasetPage({ projectId }: { projectId: string }) {
-  const [tab, setTab] = useState<Tab>("images");
   const { data: project, refresh } = usePoll(() => get<Project>(`/projects/${projectId}`), 4000, [projectId]);
-  if (!project) return null;
+  const [tab, setTab] = useState<Tab | null>(null);
+  if (!project) return <SkeletonPage />;
+  const pl = project.pipeline;
+  const steps: { value: Tab; label: string; done: boolean }[] = [
+    { value: "images", label: "Importar", done: pl.real_images > 0 },
+    { value: "classes", label: "Clases", done: pl.classes > 0 },
+    { value: "split", label: "Partición", done: pl.split_locked },
+    { value: "captions", label: "Descripciones", done: pl.by_split.train > 0 && pl.train_captions >= pl.by_split.train },
+    { value: "analysis", label: "Análisis", done: false },
+  ];
+  // Se abre en el primer paso pendiente; despues manda la eleccion del usuario.
+  const current = tab ?? steps.find((s) => !s.done)?.value ?? "images";
   return (
     <>
-      <PageHead title="Dataset" sub="Tus imágenes reales. Los originales no se modifican; las etapas siguientes usan una copia normalizada a sRGB." />
-      <Tabs value={tab} onChange={setTab} options={[
-        { value: "images", label: "Imágenes", count: project.pipeline.real_images },
-        { value: "classes", label: "Clases", count: project.pipeline.classes },
-        { value: "split", label: "Partición" },
-        { value: "captions", label: "Descripciones", count: project.pipeline.train_captions },
-        { value: "analysis", label: "Análisis" },
-      ]} />
-      {tab === "images" && <ImagesTab project={project} refresh={refresh} />}
-      {tab === "classes" && <ClassesTab project={project} refresh={refresh} />}
-      {tab === "split" && <SplitTab project={project} refresh={refresh} />}
-      {tab === "captions" && <CaptionsTab project={project} />}
-      {tab === "analysis" && <AnalysisTab projectId={project.id} />}
+      <PageHead title="Dataset" sub="Tus imágenes reales. Los originales nunca se modifican: las etapas siguientes usan una copia normalizada a sRGB." />
+      <Stepper value={current} onChange={setTab} steps={steps} />
+      {current === "images" && <ImagesTab project={project} refresh={refresh} />}
+      {current === "classes" && <ClassesTab project={project} refresh={refresh} />}
+      {current === "split" && <SplitTab project={project} refresh={refresh} />}
+      {current === "captions" && <CaptionsTab project={project} />}
+      {current === "analysis" && <AnalysisTab projectId={project.id} />}
     </>
   );
 }
@@ -104,9 +108,9 @@ function ImagesTab({ project, refresh }: { project: Project; refresh: () => void
       <Card title={`${data?.total ?? 0} imágenes`} actions={
         <select aria-label="Filtrar por partición" value={split} onChange={(e) => setSplit(e.target.value)} style={{ width: 160 }}>
           <option value="">Todas las particiones</option>
-          <option value="train">Train</option>
-          <option value="val">Val</option>
-          <option value="test">Test</option>
+          <option value="train">Entrenamiento</option>
+          <option value="val">Validación</option>
+          <option value="test">Prueba</option>
           <option value="none">Sin partición</option>
         </select>
       }>
@@ -187,11 +191,11 @@ function SplitTab({ project, refresh }: { project: Project; refresh: () => void 
       <Card title="Reparto" note={locked ? `Bloqueado. Huella ${project.split_hash?.slice(0, 16)}` : "Las proporciones se aplican por clase."}>
         <div className="fields">
           <div className="fields-3">
-            <Field label="Train"><input type="number" min={0} value={train} disabled={locked} onChange={(e) => setTrain(+e.target.value)} /></Field>
-            <Field label="Val"><input type="number" min={0} value={val} disabled={locked} onChange={(e) => setVal(+e.target.value)} /></Field>
-            <Field label="Test"><input type="number" min={0} value={test} disabled={locked} onChange={(e) => setTest(+e.target.value)} /></Field>
+            <Field label="Entrenamiento" help="Fotos con las que aprenden el LoRA y el detector."><input type="number" min={0} value={train} disabled={locked} onChange={(e) => setTrain(+e.target.value)} /></Field>
+            <Field label="Validación" help="Para elegir el mejor modelo durante el entrenamiento del detector."><input type="number" min={0} value={val} disabled={locked} onChange={(e) => setVal(+e.target.value)} /></Field>
+            <Field label="Prueba" help="Se aparta y no se toca hasta el final: mide el resultado sin trampa."><input type="number" min={0} value={test} disabled={locked} onChange={(e) => setTest(+e.target.value)} /></Field>
           </div>
-          <Field label="Seed" hint="La misma seed reproduce el mismo reparto."><input type="number" min={0} value={seed} disabled={locked} onChange={(e) => setSeed(+e.target.value)} /></Field>
+          <Field label="Semilla (seed)" hint="La misma semilla repite exactamente el mismo reparto."><input type="number" min={0} value={seed} disabled={locked} onChange={(e) => setSeed(+e.target.value)} /></Field>
           <button className="btn" disabled={locked || busy || n === 0} onClick={() => run(() => post(`/projects/${project.id}/split`, { train, val, test, seed }), "Partición aplicada").then(() => { reload(); refresh(); })}>Aplicar partición</button>
           <button className="btn btn-primary" disabled={locked || busy || !label.train || !label.test} onClick={() => setConfirm(true)}>Bloquear partición</button>
           <p className="field-hint">Al bloquear se fija la prueba: el LoRA no verá val ni test, y no se podrán importar más imágenes reales.</p>
@@ -200,8 +204,8 @@ function SplitTab({ project, refresh }: { project: Project; refresh: () => void 
       <div className="stack">
         <Card title="Reparto actual">
           <div className="stat-row">
-            <Stat value={label.train} label="Train" /><Stat value={label.val} label="Val" />
-            <Stat value={label.test} label="Test" /><Stat value={label.none} label="Sin asignar" />
+            <Stat value={label.train} label="Entrenamiento" /><Stat value={label.val} label="Validación" />
+            <Stat value={label.test} label="Prueba" /><Stat value={label.none} label="Sin asignar" />
           </div>
         </Card>
         <Card title="Fuga de datos" note="Compara huellas perceptuales entre particiones y los datos usados por cada LoRA.">

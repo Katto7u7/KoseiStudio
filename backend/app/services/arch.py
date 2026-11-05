@@ -14,7 +14,7 @@ def read_header(path: Path) -> dict[str, Any]:
     with path.open("rb") as fh:
         size = struct.unpack("<Q", fh.read(8))[0]
         if size > 100_000_000:
-            raise ValueError("Cabecera safetensors invalida")
+            raise ValueError("Cabecera safetensors inválida")
         return json.loads(fh.read(size))
 
 
@@ -33,7 +33,7 @@ def _checkpoint_cached(path: str, mtime: float) -> str:
     p = Path(path)
     if p.suffix == ".safetensors":
         return _checkpoint_arch([k for k in read_header(p) if k != "__metadata__"])
-    # Los .ckpt no se abren: cargar pickle ejecuta codigo. Los de este tamano son SD 1.x.
+    # Los .ckpt no se abren: cargar pickle ejecuta código. Los de este tamaño son SD 1.x.
     return "sd15" if p.stat().st_size < 6 * 1024**3 else "unknown"
 
 

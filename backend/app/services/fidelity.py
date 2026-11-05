@@ -5,8 +5,8 @@ Dos medidas complementarias, siempre contra el split de train:
 - Rostro (SFace): compara identidad facial. Cuando hay rostro es la evidencia mas directa
   de "es la misma persona". Se promedian los 3 pares mas parecidos, lo que sube los valores
   frente al umbral publicado para un solo par (0.363). Por eso se usa 0.45, calibrado con una
-  muestra pequena: 10 fotos reales nunca vistas dieron 0.57 a 0.89 y 7 personas ajenas 0.06 a 0.36.
-- CLIP: parecido visual general. Sirve tambien para objetos, pero no prueba identidad.
+  muestra pequeña: 10 fotos reales nunca vistas dieron 0.57 a 0.89 y 7 personas ajenas 0.06 a 0.36.
+- CLIP: parecido visual general. Sirve también para objetos, pero no prueba identidad.
 """
 from __future__ import annotations
 
@@ -130,7 +130,7 @@ def reference(project_id: str) -> Optional[dict[str, Any]]:
 
 
 def score(project_id: str, path: Path) -> Optional[dict[str, Any]]:
-    """Fidelidad de una imagen. None si aun no hay imagenes reales de referencia."""
+    """Fidelidad de una imagen. None si aún no hay imágenes reales de referencia."""
     from . import features
 
     ref = reference(project_id)

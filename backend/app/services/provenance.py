@@ -24,7 +24,7 @@ def record(generation: dict[str, Any]) -> dict[str, Any]:
 
 
 def embed_watermark(image: Image.Image, _project_id: str = "") -> Image.Image:
-    """Marca DWT-DCT-SVD. Si la imagen es demasiado pequena para el metodo, se deja sin marca."""
+    """Marca DWT-DCT-SVD. Si la imagen es demasiado pequeña para el metodo, se deja sin marca."""
     try:
         from imwatermark import WatermarkEncoder
         if min(image.size) < 256:

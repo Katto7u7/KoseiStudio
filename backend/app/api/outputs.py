@@ -1,4 +1,4 @@
-"""Calidad y construccion del dataset extendido."""
+"""Calidad y construcción del dataset extendido."""
 from __future__ import annotations
 
 from typing import List, Optional
@@ -48,7 +48,7 @@ def start_build(project_id: str, body: BuildIn):
     project_or_404(project_id)
     bad = [t for t in body.tasks if t not in export.TASKS]
     if bad or not body.tasks:
-        raise HTTPException(422, "Tarea de exportacion no valida")
+        raise HTTPException(422, "Tarea de exportación no válida")
     build_id = db.new_id()
     params = {**body.model_dump(), "build_id": build_id}
     job_id = jobs.enqueue("build", project_id, params)
@@ -74,9 +74,9 @@ def list_builds(project_id: str):
 def download_build(build_id: str):
     build = db.one("SELECT * FROM builds WHERE id=?", [build_id])
     if not build or build["status"] != "ready":
-        raise HTTPException(404, "Exportacion no disponible")
+        raise HTTPException(404, "Exportación no disponible")
     name = build["summary"]["zip"]
     path = storage.project_dir(build["project_id"]) / "builds" / build_id / storage.safe_filename(name)
     if not path.exists():
-        raise HTTPException(404, "El archivo ya no esta en disco")
+        raise HTTPException(404, "El archivo ya no está en disco")
     return FileResponse(path, media_type="application/zip", filename=path.name)

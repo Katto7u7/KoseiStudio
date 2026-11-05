@@ -1,4 +1,4 @@
-"""Persistencia en SQLite. Una conexion por hilo, modo WAL."""
+"""Persistencia en SQLite. Una conexión por hilo, modo WAL."""
 from __future__ import annotations
 
 import json

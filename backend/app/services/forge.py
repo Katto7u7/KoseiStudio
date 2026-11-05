@@ -1,4 +1,4 @@
-"""Cliente del motor de generacion (Stable Diffusion WebUI Forge)."""
+"""Cliente del motor de generación (Stable Diffusion WebUI Forge)."""
 from __future__ import annotations
 
 import base64
@@ -42,7 +42,7 @@ def _get(path: str, timeout: float = 15.0) -> Any:
             r.raise_for_status()
             return r.json()
     except httpx.TransportError as exc:
-        raise ForgeUnavailable("El motor de generacion aun no responde") from exc
+        raise ForgeUnavailable("El motor de generación aún no responde") from exc
     except httpx.HTTPStatusError as exc:
         raise ForgeError(f"Forge respondio {exc.response.status_code} en {path}") from exc
 
@@ -55,7 +55,7 @@ def _post(path: str, payload: Optional[dict] = None, timeout: float = 60.0) -> A
                 raise ForgeError(f"Forge respondio {r.status_code}: {r.text[:800]}")
             return r.json() if r.content else {}
     except httpx.TransportError as exc:
-        raise ForgeUnavailable("Se perdio la conexion con el motor de generacion") from exc
+        raise ForgeUnavailable("Se perdio la conexión con el motor de generación") from exc
 
 
 def is_ready() -> bool:
@@ -101,7 +101,7 @@ def current_checkpoint() -> str:
 
 
 def ensure_checkpoint(title: str, arch: str) -> None:
-    """Forge guarda solo el nombre del archivo o el titulo completo segun la ruta usada."""
+    """Forge guarda solo el nombre del archivo o el titulo completo según la ruta usada."""
     current = current_checkpoint()
     short = title.split(" [")[0]
     if current == title or current.split(" [")[0] == short:
@@ -114,7 +114,7 @@ def ensure_checkpoint(title: str, arch: str) -> None:
 
 
 def txt2img(payload: dict[str, Any]) -> tuple[list[Image.Image], dict[str, Any]]:
-    """Genera sin guardar en el disco de Forge. Devuelve imagenes y el `info` estructurado."""
+    """Genera sin guardar en el disco de Forge. Devuelve imágenes y el `info` estructurado."""
     body = {
         "save_images": False,
         "send_images": True,

@@ -1,4 +1,4 @@
-"""Motor de generacion: modelos disponibles, generacion y vista previa en vivo."""
+"""Motor de generación: modelos disponibles, generación y vista previa en vivo."""
 from __future__ import annotations
 
 from typing import Optional
@@ -65,7 +65,7 @@ def start_generation(project_id: str, body: GenerateIn):
     if body.lora_id:
         lora = db.one("SELECT * FROM loras WHERE id=?", [body.lora_id])
         if not lora or lora["status"] != "ready":
-            raise HTTPException(422, "El LoRA no esta disponible")
+            raise HTTPException(422, "El LoRA no está disponible")
         if lora["arch"] != "unknown" and lora["arch"] != model["arch"]:
             raise HTTPException(
                 422,

@@ -136,7 +136,7 @@ def prepare_dataset(ctx: JobContext, images: list[dict[str, Any]], root: Path, t
             caption = f"{token} {caption}"
         (folder / f"{image['id']}.txt").write_text(caption, encoding="utf-8")
         hashes.append(image["sha256"])
-    ctx.log(f"Dataset: {len(images)} imagenes del split train en {folder}")
+    ctx.log(f"Dataset: {len(images)} imágenes del split train en {folder}")
     return hashes
 
 
@@ -154,10 +154,10 @@ def read_losses(lora_id: str, project_id: str, limit: int = 400) -> list[dict[st
 def _humanize_failure(tail: list[str], code: int) -> str:
     text = "\n".join(tail)
     if "CUDA out of memory" in text or "OutOfMemoryError" in text:
-        return "La GPU se quedo sin memoria. Baja la resolucion, el lote o la dimension de red."
+        return "La GPU se quedo sin memoria. Baja la resolución, el lote o la dimensión de red."
     if "No data found" in text or "No images" in text:
-        return "kohya no encontro imagenes en el dataset."
-    return f"kohya termino con codigo {code}. Ultimas lineas:\n" + "\n".join(tail[-12:])
+        return "kohya no encontro imágenes en el dataset."
+    return f"kohya termino con código {code}. Últimas lineas:\n" + "\n".join(tail[-12:])
 
 
 @register("train_lora", "gpu")
@@ -176,7 +176,7 @@ def run_training(ctx: JobContext) -> dict[str, Any]:
         [project_id],
     )
     if not images:
-        raise ValueError("No hay imagenes reales en el split de entrenamiento")
+        raise ValueError("No hay imágenes reales en el split de entrenamiento")
 
     hashes = prepare_dataset(ctx, images, base / "dataset", p["token"], int(p["repeats"]))
     db.update("loras", lora_id, {"train_hashes": hashes, "status": "training"})
@@ -285,7 +285,7 @@ EVAL_PROMPTS = [
 def lora_files(lora: dict[str, Any]) -> list[Path]:
     output = storage.project_dir(lora["project_id"]) / "loras" / lora["id"] / "output"
     final_step = f"step{int((lora['config'] or {}).get('steps') or 0):08d}"
-    # El punto de control del ultimo paso es el mismo modelo que el archivo final.
+    # El punto de control del último paso es el mismo modelo que el archivo final.
     files = [p for p in output.glob("*.safetensors") if not p.stem.endswith(final_step)]
     return sorted(files, key=lambda p: (p.stem == lora["name"], p.stem))
 

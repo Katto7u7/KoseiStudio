@@ -1,0 +1,86 @@
+/* Medianoche: oscuro con profundidad y un acento luminoso. Oscuro por defecto, claro como alternativa.
+   Real y sintetico conservan su papel: verde azulado y ambar, ajustados a cada fondo. */
+
+:root {
+  color-scheme: dark;
+  --font-ui: "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+  --display-weight: 700;
+  --display-tracking: -.025em;
+  --app-bg: radial-gradient(1200px 600px at 12% -10%, rgba(99, 91, 255, .20), transparent 60%),
+            radial-gradient(900px 500px at 100% 0%, rgba(34, 211, 238, .10), transparent 55%), #060814;
+  --bg: #060814;
+  --card: rgba(255, 255, 255, .035);
+  --card-border: rgba(255, 255, 255, .085);
+  --raised: rgba(255, 255, 255, .06);
+  --line: rgba(255, 255, 255, .08);
+  --line-strong: rgba(255, 255, 255, .16);
+  --ink: #F1F4FB;
+  --mist: #AAB3C8;
+  --fog: #8790A8;
+  --action: #7C6CFF;
+  --action-hover: #9285FF;
+  --action-soft: rgba(124, 108, 255, .16);
+  --on-action: #FFFFFF;
+  --action-gradient: linear-gradient(135deg, #7C6CFF, #3BA2FF);
+  --real: #3DE6C9;
+  --real-fill: #1FA08F;
+  --real-soft: rgba(61, 230, 201, .12);
+  --synth: #FFBE5C;
+  --synth-fill: #C9801F;
+  --synth-soft: rgba(255, 190, 92, .12);
+  --good: #57D99A; --good-soft: rgba(87, 217, 154, .12);
+  --warn: #F2C35B; --warn-soft: rgba(242, 195, 91, .12);
+  --bad: #FF8A80; --bad-soft: rgba(255, 138, 128, .12);
+  --stage: rgba(0, 0, 0, .45);
+  --rail: rgba(8, 11, 24, .6);
+  --rail-solid: #0B0F1F;
+  --rail-border: rgba(255, 255, 255, .07);
+  --rail-raised: rgba(255, 255, 255, .06);
+  --rail-line: rgba(255, 255, 255, .1);
+  --rail-text: #AAB3C8;
+  --rail-ink: #FFFFFF;
+  --rail-faint: #7C86A0;
+  --next-bg: linear-gradient(135deg, rgba(124, 108, 255, .22), rgba(59, 162, 255, .12));
+  --next-ink: #FFFFFF;
+  --next-border: rgba(124, 108, 255, .35);
+  --shadow-sm: none;
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, .4);
+  --shadow-lg: 0 24px 70px rgba(0, 0, 0, .65);
+  --card-shine: inset 0 1px 0 rgba(255, 255, 255, .06);
+  --radius: 10px;
+  --radius-lg: 16px;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --app-bg: radial-gradient(1200px 600px at 12% -10%, rgba(99, 91, 255, .10), transparent 60%), #F5F6FB;
+  --bg: #F5F6FB; --card: #FFFFFF; --card-border: #E4E6F0; --raised: #EEF0F7; --line: #E4E6F0; --line-strong: #CDD1E0;
+  --ink: #0E1121; --mist: #555C75; --fog: #6B7189;
+  --action: #5B4BEA; --action-hover: #4A3BD6; --action-soft: rgba(91, 75, 234, .09);
+  --action-gradient: linear-gradient(135deg, #5B4BEA, #2F7FE0);
+  --real: #08796B; --real-fill: #0B8F7E; --real-soft: rgba(11, 143, 126, .1);
+  --synth: #A9560A; --synth-fill: #D9730D; --synth-soft: rgba(217, 115, 13, .1);
+  --good: #137A4A; --good-soft: rgba(19, 122, 74, .1); --warn: #8F6200; --warn-soft: rgba(196, 139, 0, .12);
+  --bad: #C43A2E; --bad-soft: rgba(196, 58, 46, .08); --stage: #0E1121;
+  --rail: rgba(255, 255, 255, .7); --rail-solid: #FFFFFF; --rail-border: #E4E6F0; --rail-raised: #EEF0F7; --rail-line: #DCDFEA;
+  --rail-text: #555C75; --rail-ink: #0E1121; --rail-faint: #8A90A6;
+  --next-bg: linear-gradient(135deg, #5B4BEA, #2F7FE0); --next-ink: #FFFFFF; --next-border: transparent;
+  --shadow-sm: 0 1px 2px rgba(14, 17, 33, .05); --shadow-md: 0 8px 24px rgba(14, 17, 33, .08); --shadow-lg: 0 24px 60px rgba(14, 17, 33, .18);
+  --card-shine: none;
+}
+
+.card, .hero, .stepper { backdrop-filter: blur(12px); }
+.btn-primary { background: var(--action-gradient); border-color: transparent; }
+.btn-primary:hover:not(:disabled) { filter: brightness(1.1); background: var(--action-gradient); }
+
+/* Barra lateral flotante sobre el fondo. */
+.shell { padding: 12px 0 12px 12px; grid-template-columns: 248px minmax(0, 1fr); gap: 0; }
+.rail { border: 1px solid var(--rail-border); border-radius: 18px; box-shadow: var(--shadow-md), var(--card-shine); }
+.topbar { border-bottom-color: transparent; }
+
+@media (max-width: 820px) {
+  .shell { padding: 0; }
+  .rail { border-radius: 0; border-width: 0 0 1px; }
+}

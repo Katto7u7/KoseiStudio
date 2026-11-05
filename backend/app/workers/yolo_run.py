@@ -24,7 +24,7 @@ def main(config_path: str) -> None:
         workers=2, plots=False, verbose=False, device=0, cache=False,
     )
     best = run_root / "train" / "weights" / "best.pt"
-    # La prueba real solo se toca aqui, una vez, con el mejor modelo segun validacion.
+    # La prueba real solo se toca aqui, una vez, con el mejor modelo según validación.
     metrics = YOLO(str(best)).val(
         data=cfg["data"], split="test", imgsz=cfg["imgsz"], batch=cfg["batch"],
         project=str(run_root), name="test", exist_ok=True, plots=False, verbose=False, device=0, workers=2,

@@ -17,28 +17,11 @@ import ReviewPage from "./pages/ReviewPage";
 import SystemPage from "./pages/SystemPage";
 
 type Theme = "light" | "dark";
-export const SKINS = ["grafito", "porcelana", "medianoche"] as const;
-type Skin = (typeof SKINS)[number];
-const NATURAL_THEME: Record<Skin, Theme> = { grafito: "dark", porcelana: "light", medianoche: "dark" };
 
-/** Aspecto y tema. `?skin=` y `?theme=` permiten comparar aspectos durante la eleccion de diseno. */
-function useAppearance() {
-  const [skin, setSkin] = useStored<Skin>("kosei_skin", "grafito");
-  const [theme, setTheme] = useStored<Theme>("kosei_theme_v3", NATURAL_THEME[skin]);
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const asked = params.get("skin") as Skin | null;
-    if (asked && SKINS.includes(asked)) {
-      setSkin(asked);
-      setTheme((params.get("theme") as Theme) || NATURAL_THEME[asked]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  useEffect(() => {
-    document.documentElement.setAttribute("data-skin", skin);
-    document.documentElement.setAttribute("data-theme", theme);
-  }, [skin, theme]);
-  return { skin, theme, setSkin, setTheme };
+function useTheme() {
+  const [theme, setTheme] = useStored<Theme>("kosei_theme_v3", "dark");
+  useEffect(() => { document.documentElement.setAttribute("data-theme", theme); }, [theme]);
+  return { theme, setTheme };
 }
 
 function ThemeButton({ theme, setTheme }: { theme: Theme; setTheme: (t: Theme) => void }) {
@@ -207,9 +190,16 @@ function JobDock({ jobs, onChange }: { jobs: Job[]; onChange: () => void }) {
 }
 
 function Shell() {
-  const { theme, setTheme } = useAppearance();
+  const { theme, setTheme } = useTheme();
   const location = useLocation();
-  const { data: system, refresh } = usePoll(() => get<SystemStatus>("/system"), 2500);
+  const { data: raw, refresh } = usePoll(() => get<SystemStatus>("/system"), 2500);
+  // Un solo sondeo lento no debe anunciar que el motor se cayo: se exigen dos seguidos.
+  const misses = useRef(0);
+  const system = useMemo(() => {
+    if (!raw) return raw;
+    misses.current = raw.engine.ready ? 0 : misses.current + 1;
+    return misses.current === 1 ? { ...raw, engine: { ...raw.engine, ready: true } } : raw;
+  }, [raw]);
   const { data: projects } = usePoll(() => get<Project[]>("/projects"), 5000, [location.pathname]);
   const jobs = useMemo(() => system?.active_jobs ?? [], [system]);
   useEffect(() => { document.querySelector(".main")?.scrollTo({ top: 0 }); }, [location.pathname]);

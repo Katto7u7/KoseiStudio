@@ -110,7 +110,7 @@ def main() -> int:
 
     if missing_required:
         print("Faltan archivos obligatorios y no se pudieron descargar: " + ", ".join(missing_required), flush=True)
-        print("Comprueba la conexion a internet y vuelve a ejecutar: docker compose up -d", flush=True)
+        print("Comprueba la conexión a internet y vuelve a ejecutar: docker compose up -d", flush=True)
         return 1
     print("Modelos listos.", flush=True)
     return 0

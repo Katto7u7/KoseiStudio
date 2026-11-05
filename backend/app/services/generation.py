@@ -1,4 +1,4 @@
-"""Generacion por lotes: reproducible, cancelable y guardada imagen por imagen."""
+"""Generación por lotes: reproducible, cancelable y guardada imagen por imagen."""
 from __future__ import annotations
 
 import itertools
@@ -85,7 +85,7 @@ def _subject_region(image: Image.Image, cls: Optional[dict[str, Any]], tmp: Path
             x, y, w, h = [float(v) for v in face[:4]]
             box = (x, y, w, h)
     if box is None and cls is not None:
-        probe = tmp / "region.png"
+        probe = tmp / "región.png"
         image.convert("RGB").save(probe, "PNG")
         found, _ = labeling.detect(probe, cls)
         probe.unlink(missing_ok=True)
@@ -96,7 +96,7 @@ def _subject_region(image: Image.Image, cls: Optional[dict[str, Any]], tmp: Path
         return None
     x, y, w, h = box
     side = max(w, h) * REFINE_MARGIN
-    # Si la region ya ocupa casi toda la imagen, refinarla no aporta resolucion.
+    # Si la región ya ocupa casi toda la imagen, refinarla no aporta resolución.
     if side >= min(width, height) * 0.8:
         return None
     side = int(side)
@@ -107,7 +107,7 @@ def _subject_region(image: Image.Image, cls: Optional[dict[str, Any]], tmp: Path
 
 
 def refine_subject(image: Image.Image, region: tuple[int, int, int, int], payload: dict[str, Any], denoise: float) -> Image.Image:
-    """Regenera la region a resolucion completa conservando la composicion, y la vuelve a pegar."""
+    """Regenera la región a resolución completa conservando la composicion, y la vuelve a pegar."""
     crop = image.crop(region)
     target = (int(payload["width"]), int(payload["height"]))
     enlarged = crop.resize(target, Image.Resampling.LANCZOS)
@@ -195,7 +195,7 @@ def run_generate(ctx: JobContext) -> dict[str, Any]:
             images, info = forge.txt2img(payload)
             ctx.check_cancel()
             if not images:
-                raise forge.ForgeError("El motor no devolvio imagenes")
+                raise forge.ForgeError("El motor no devolvio imágenes")
             seeds = info.get("all_seeds") or [seed + j for j in group]
             for offset, (index, image) in enumerate(zip(group, images)):
                 actual_seed = int(seeds[offset]) if offset < len(seeds) else seed + index
