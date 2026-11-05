@@ -7,7 +7,7 @@ import { BarList, ConditionDots, LossChart } from "../ui/charts";
 import { Confirm, Progress, StatusPill, Thumb, ToastProvider, useAction } from "../ui/kit";
 import ProjectsPage from "../pages/ProjectsPage";
 import QualityPage from "../pages/QualityPage";
-import { STAGES } from "../App";
+import { STAGES, flowProgress } from "../ui/flow";
 
 afterEach(() => vi.restoreAllMocks());
 

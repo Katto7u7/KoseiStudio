@@ -1,69 +1,108 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Job, Project, del, get, post } from "../lib/api";
+import { Job, Project, del, get } from "../lib/api";
 import { formatDate, usePoll } from "../lib/hooks";
-import { Card, Confirm, JobPill, Notice, PageHead, Stat, jobLabel, useAction } from "../ui/kit";
+import { FlowMap, Mosaic } from "../ui/flow";
+import { Card, Confirm, CountUp, JobPill, Notice, SkeletonPage, Stat, jobLabel, useAction } from "../ui/kit";
 
-function nextStep(p: Project): { text: string; to: string; action: string } | null {
+interface Next { title: string; why: string; to: string; action: string }
+
+function nextStep(p: Project): Next | null {
   const pl = p.pipeline;
   const pendingReal = (pl.by_status.real.candidate ?? 0) + (pl.by_status.real.needs_review ?? 0) + (pl.by_status.real.no_detection ?? 0);
-  if (pl.real_images === 0) return { text: "Importa tus imágenes reales para empezar.", to: "dataset", action: "Importar imágenes" };
-  if (!pl.classes) return { text: "Define al menos una clase para poder etiquetar.", to: "dataset", action: "Definir clases" };
-  if (!pl.split_locked) return { text: "Reparte las imágenes en train, val y test, y bloquea la partición.", to: "dataset", action: "Definir partición" };
-  if (pendingReal > 0) return { text: `Verifica las etiquetas de ${pendingReal} imágenes reales: son la verdad de referencia.`, to: "review", action: "Revisar etiquetas" };
-  if (pl.loras_ready === 0) return { text: "Entrena un LoRA con el split de entrenamiento.", to: "lora", action: "Entrenar LoRA" };
-  if (pl.synthetic_images === 0) return { text: "Genera las primeras imágenes sintéticas.", to: "generate", action: "Generar" };
-  if (!pl.by_status.synthetic.approved) return { text: "Aprueba las imágenes sintéticas que quieras usar.", to: "review", action: "Revisar sintéticas" };
-  if (!pl.quality_reports) return { text: "Evalúa la calidad de lo generado.", to: "quality", action: "Evaluar calidad" };
-  if (!pl.builds_ready) return { text: "Construye y exporta el dataset extendido.", to: "build", action: "Construir dataset" };
-  if (!pl.experiments_ready) return { text: "Compara real contra real más sintético sobre la prueba real.", to: "experiment", action: "Crear experimento" };
+  if (pl.real_images === 0) return { title: "Importa tus imágenes reales", why: "Todo parte de ellas: el modelo aprende de estas fotos.", to: "dataset", action: "Importar imágenes" };
+  if (!pl.classes) return { title: "Define qué vas a detectar", why: "Sin una clase, el etiquetado no sabe qué buscar.", to: "dataset", action: "Definir clases" };
+  if (!pl.split_locked) return { title: "Separa las imágenes de prueba", why: "Una parte queda fuera del entrenamiento para poder medir sin trampa.", to: "dataset", action: "Definir partición" };
+  if (pendingReal > 0) return { title: `Verifica ${pendingReal} imágenes reales`, why: "Son la verdad de referencia del experimento: un programa no puede aprobarlas por ti.", to: "review", action: "Revisar etiquetas" };
+  if (pl.loras_ready === 0) return { title: "Entrena tu LoRA", why: "Es lo que enseña al modelo cómo es tu sujeto.", to: "lora", action: "Entrenar" };
+  if (pl.synthetic_images === 0) return { title: "Genera tus primeras imágenes", why: "El LoRA ya está listo para crear escenas nuevas.", to: "generate", action: "Generar" };
+  if (!pl.by_status.synthetic.approved) return { title: "Elige las sintéticas que sirven", why: "Solo lo que apruebas entra al dataset.", to: "review", action: "Revisar sintéticas" };
+  if (!pl.quality_reports) return { title: "Evalúa lo generado", why: "Mide el parecido al sujeto, la diversidad y las repeticiones.", to: "quality", action: "Evaluar" };
+  if (!pl.builds_ready) return { title: "Construye el dataset extendido", why: "Une lo real y lo sintético en un ZIP listo para YOLO.", to: "build", action: "Construir" };
+  if (!pl.experiments_ready) return { title: "Comprueba si tu detector mejora", why: "Compara real contra real más sintético sobre la prueba real.", to: "experiment", action: "Crear experimento" };
   return null;
 }
 
-export default function OverviewPage({ projectId }: { projectId: string }) {
+export default function OverviewPage({ projectId, runningKinds }: { projectId: string; runningKinds: string[] }) {
   const { data: project, error } = usePoll(() => get<Project>(`/projects/${projectId}`), 4000, [projectId]);
-  const { data: jobs } = usePoll(() => get<Job[]>(`/jobs?project_id=${projectId}&limit=8`), 4000, [projectId]);
+  const { data: jobs } = usePoll(() => get<Job[]>(`/jobs?project_id=${projectId}&limit=6`), 4000, [projectId]);
   const [deleting, setDeleting] = useState(false);
   const { run } = useAction();
   const navigate = useNavigate();
 
-  if (error) return <Notice kind="bad" title="No se pudo abrir el proyecto">{error}</Notice>;
-  if (!project) return null;
+  if (error && !project) return <Notice kind="bad" title="No se pudo abrir el proyecto">{error}</Notice>;
+  if (!project) return <SkeletonPage />;
   const pl = project.pipeline;
   const next = nextStep(project);
-  const approved = (pl.by_status.real.approved ?? 0) + (pl.by_status.synthetic.approved ?? 0);
+  const approvedSynth = pl.by_status.synthetic.approved ?? 0;
+  const approvedReal = pl.by_status.real.approved ?? 0;
+  const total = pl.real_images + approvedSynth;
 
   return (
     <>
-      <PageHead
-        title={project.name}
-        sub={project.description || undefined}
-        actions={<button className="btn btn-danger" onClick={() => setDeleting(true)}>Eliminar proyecto</button>}
-      />
-      {next && (
-        <div className="next-step">
-          <div>{next.text}</div>
-          <Link className="btn btn-primary" to={next.to}>{next.action}</Link>
+      <section className="hero">
+        <div className="stack" style={{ alignContent: "space-between" }}>
+          <div>
+            <h1>{project.name}</h1>
+            {project.description && <p className="page-sub">{project.description}</p>}
+          </div>
+          <div className="stack-sm">
+            <div className="hero-title">
+              {approvedSynth > 0
+                ? <>Tu dataset creció de {pl.real_images} a <CountUp value={total} /> imágenes</>
+                : pl.real_images > 0 ? <>Tu dataset tiene <CountUp value={pl.real_images} /> imágenes reales</> : "Tu dataset aún está vacío"}
+            </div>
+            {pl.real_images > 0 && (
+              <>
+                <div className="mix" style={{ height: 12 }} role="img" aria-label={`${pl.real_images} reales y ${approvedSynth} sintéticas aprobadas`}>
+                  <i style={{ width: `${(pl.real_images / Math.max(total, 1)) * 100}%`, background: "var(--real-fill)" }} />
+                  {approvedSynth > 0 && <i style={{ width: `${(approvedSynth / total) * 100}%`, background: "var(--synth-fill)" }} />}
+                </div>
+                <div className="legend">
+                  <span><i style={{ background: "var(--real-fill)" }} />{pl.real_images} reales</span>
+                  <span><i style={{ background: "var(--synth-fill)" }} />{approvedSynth} sintéticas aprobadas{pl.synthetic_images > approvedSynth ? `, de ${pl.synthetic_images} generadas` : ""}</span>
+                </div>
+              </>
+            )}
+          </div>
         </div>
+        <Mosaic projectId={projectId} />
+      </section>
+
+      {next ? (
+        <div className="next-step">
+          <div>
+            <div className="eyebrow">Siguiente paso</div>
+            <strong>{next.title}</strong>
+            <div className="eyebrow" style={{ marginTop: 2 }}>{next.why}</div>
+          </div>
+          <Link className="btn btn-primary btn-large" to={next.to}>{next.action}</Link>
+        </div>
+      ) : (
+        <div style={{ marginBottom: 16 }}><Notice kind="good" title="Flujo completo">Todas las etapas tienen resultados. Puedes generar más imágenes o repetir el experimento.</Notice></div>
       )}
-      {!next && <div style={{ marginBottom: 16 }}><Notice kind="good" title="Flujo completo">Todas las etapas tienen resultados. Puedes generar más imágenes o repetir el experimento.</Notice></div>}
-      <div className="grid grid-2">
-        <Card title="Imágenes">
-          <div className="stat-row">
-            <Stat value={pl.real_images} label="Reales" />
-            <Stat value={pl.synthetic_images} label="Sintéticas" />
-            <Stat value={approved} label="Aprobadas" />
-          </div>
+
+      <div className="stack">
+        <Card title="Avance del proyecto">
+          <FlowMap pipeline={pl} runningKinds={runningKinds} />
         </Card>
-        <Card title="Partición" note={pl.split_locked ? `Bloqueada. Huella ${project.split_hash?.slice(0, 12)}` : "Sin bloquear"}>
-          <div className="stat-row">
-            <Stat value={pl.by_split.train} label="Train" />
-            <Stat value={pl.by_split.val} label="Val" />
-            <Stat value={pl.by_split.test} label="Test" />
-          </div>
-        </Card>
-      </div>
-      <div style={{ marginTop: 16 }}>
+
+        <div className="grid grid-2">
+          <Card title="Verificación" note="Imágenes aprobadas por una persona.">
+            <div className="stat-row">
+              <Stat value={approvedReal} label={`de ${pl.real_images} reales`} />
+              <Stat value={approvedSynth} label={`de ${pl.synthetic_images} sintéticas`} />
+            </div>
+          </Card>
+          <Card title="Partición" note={pl.split_locked ? `Bloqueada. Huella ${project.split_hash?.slice(0, 12)}` : "Aún sin bloquear"}>
+            <div className="stat-row">
+              <Stat value={pl.by_split.train} label="Entrenamiento" />
+              <Stat value={pl.by_split.val} label="Validación" />
+              <Stat value={pl.by_split.test} label="Prueba" />
+            </div>
+          </Card>
+        </div>
+
         <Card title="Actividad reciente">
           {jobs && jobs.length > 0 ? (
             <div className="table-wrap">
@@ -81,9 +120,15 @@ export default function OverviewPage({ projectId }: { projectId: string }) {
                 </tbody>
               </table>
             </div>
-          ) : <p className="muted">Aún no se ha ejecutado ningún trabajo en este proyecto.</p>}
+          ) : <p className="muted">Aquí verás cada trabajo que ejecutes en este proyecto.</p>}
         </Card>
+
+        <div className="row-between" style={{ marginTop: 8 }}>
+          <span className="faint">Creado {formatDate(project.created_at)}</span>
+          <button className="btn btn-small btn-danger" onClick={() => setDeleting(true)}>Eliminar proyecto</button>
+        </div>
       </div>
+
       {deleting && (
         <Confirm
           danger title="Eliminar proyecto" action="Eliminar definitivamente"
