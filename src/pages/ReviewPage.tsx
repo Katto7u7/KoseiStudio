@@ -269,7 +269,8 @@ function BoxCanvas({ image, boxes, selected, drawing, classes, onSelect, onChang
 
   return (
     <div
-      ref={ref} className="canvas-wrap" style={{ cursor: drawing ? "crosshair" : "default" }}
+      ref={ref} className="canvas-wrap"
+      style={{ cursor: drawing ? "crosshair" : "default", width: `min(100%, calc((100vh - 250px) * ${image.width / image.height}))`, justifySelf: "center" }}
       onPointerDown={(e) => {
         if (drawing) {
           const p = point(e);

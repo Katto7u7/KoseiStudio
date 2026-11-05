@@ -152,12 +152,14 @@ export default function GeneratePage({ projectId }: { projectId: string }) {
                   </div>
                 </div>
               </details>
-              <button className="btn btn-primary btn-block" disabled={busy || !system?.engine.ready || !checkpoint || !prompt.trim() || !classId || !!mismatch} onClick={start}>
-                Generar {count} {count === 1 ? "imagen" : "imágenes"}
-              </button>
-              {!system?.engine.ready && <p className="field-hint">El motor aún está cargando.</p>}
             </div>
           </Card>
+          <div className="sticky-action">
+            <button className="btn btn-primary btn-block" disabled={busy || !system?.engine.ready || !checkpoint || !prompt.trim() || !classId || !!mismatch} onClick={start}>
+              Generar {count} {count === 1 ? "imagen" : "imágenes"}
+            </button>
+            {!system?.engine.ready && <p className="field-hint">El motor aún está cargando.</p>}
+          </div>
         </div>
         <div className="stack">
           <LivePreview job={active} selected={selected} />

@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { EngineModel, Job, Lora, Project, get, post, upload } from "../lib/api";
+import { EngineModel, Job, Lora, Project, del, get, post, upload } from "../lib/api";
 import { formatDate, formatDuration, usePoll } from "../lib/hooks";
 import { LossChart } from "../ui/charts";
-import { Card, Empty, Field, JobPill, Notice, PageHead, Progress, useAction } from "../ui/kit";
+import { Card, Confirm, Empty, Field, JobPill, Notice, PageHead, Progress, useAction } from "../ui/kit";
 
 const ARCH_PRESET: Record<string, { resolution: number; steps: number; lr: number; dim: number; alpha: number; repeats: number; note: string }> = {
   sd15: { resolution: 512, steps: 1500, lr: 1e-4, dim: 16, alpha: 8, repeats: 10, note: "Unos 10 minutos en una RTX 3060." },
   sdxl: { resolution: 1024, steps: 1500, lr: 1e-4, dim: 16, alpha: 8, repeats: 10, note: "Se entrena solo el UNet para caber en 12 GB. Lleva más de media hora." },
   flux: { resolution: 768, steps: 1000, lr: 1e-4, dim: 16, alpha: 16, repeats: 10, note: "Requiere los componentes de Flux. Lleva más de una hora en 12 GB." },
 };
+
+const LORA_STATUS: Record<string, string> = { queued: "En cola", training: "Entrenando", failed: "Falló", cancelled: "Cancelado" };
 
 export default function LoraPage({ projectId }: { projectId: string }) {
   const { data: loras, refresh } = usePoll(() => get<Lora[]>(`/loras?project_id=${projectId}`), 4000, [projectId]);
@@ -18,6 +20,7 @@ export default function LoraPage({ projectId }: { projectId: string }) {
   const shown = loras?.find((l) => l.id === (selected ?? training?.id));
   const fileRef = useRef<HTMLInputElement>(null);
   const { run } = useAction();
+  const [removing, setRemoving] = useState<Lora | null>(null);
   return (
     <>
       <PageHead
@@ -50,11 +53,16 @@ export default function LoraPage({ projectId }: { projectId: string }) {
                         <td>{l.arch_label}</td>
                         <td className="muted">{l.base_model ?? "—"}</td>
                         <td>
-                          {l.origin === "trained"
-                            ? <span className="pill pill-good">{l.status === "ready" ? `${l.train_image_count} imágenes de train` : l.status}</span>
-                            : <span className="pill pill-warn">Externo, no verificable</span>}
+                          {l.origin === "external"
+                            ? <span className="pill pill-warn">Externo, no verificable</span>
+                            : l.status === "ready"
+                              ? <span className="pill pill-good">{l.train_image_count} imágenes de train</span>
+                              : <span className={`pill ${l.status === "failed" ? "pill-bad" : l.status === "cancelled" ? "pill-warn" : ""}`}>{LORA_STATUS[l.status] ?? l.status}</span>}
                         </td>
-                        <td style={{ textAlign: "right" }}>{l.job_id && <button className="btn btn-small" onClick={() => setSelected(l.id)}>Detalle</button>}</td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          {l.job_id && <button className="btn btn-small" onClick={() => setSelected(l.id)}>Detalle</button>}{" "}
+                          {l.origin === "trained" && !["queued", "training"].includes(l.status) && <button className="btn btn-small" onClick={() => setRemoving(l)}>Eliminar</button>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -64,6 +72,20 @@ export default function LoraPage({ projectId }: { projectId: string }) {
           </Card>
         </div>
       </div>
+      {removing && (
+        <Confirm
+          danger title="Eliminar LoRA" action="Eliminar"
+          body={<>Se borrará <strong>{removing.name}</strong> y sus puntos de control. No se permite si ya generó imágenes: rompería su procedencia.</>}
+          onClose={() => setRemoving(null)}
+          onConfirm={async () => {
+            const target = removing;
+            setRemoving(null);
+            await run(() => del(`/loras/${target.id}`), "LoRA eliminado");
+            if (selected === target.id) setSelected(null);
+            refresh();
+          }}
+        />
+      )}
     </>
   );
 }

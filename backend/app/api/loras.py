@@ -53,6 +53,28 @@ def lora_losses(lora_id: str):
     return training.read_losses(lora_id, lora["project_id"]) if lora["project_id"] else []
 
 
+@router.delete("/loras/{lora_id}", status_code=204)
+def delete_lora(lora_id: str):
+    """Solo LoRAs entrenados aqui y sin imagenes generadas: los externos son del usuario."""
+    lora = db.one("SELECT * FROM loras WHERE id=?", [lora_id])
+    if not lora:
+        raise HTTPException(404, "LoRA no encontrado")
+    if lora["origin"] != "trained":
+        raise HTTPException(409, "Solo se pueden eliminar los LoRAs entrenados en la aplicacion")
+    if lora["status"] in ("queued", "training"):
+        raise HTTPException(409, "El LoRA se esta entrenando")
+    if db.scalar("SELECT COUNT(*) FROM images WHERE lora_id=?", [lora_id]):
+        raise HTTPException(409, "Este LoRA ya genero imagenes: eliminarlo romperia su procedencia")
+    (config.LORA_DIR / f"{lora['name']}.safetensors").unlink(missing_ok=True)
+    if lora["project_id"]:
+        storage.remove_tree(storage.project_dir(lora["project_id"]) / "loras" / lora_id)
+    db.execute("DELETE FROM loras WHERE id=?", [lora_id])
+    try:
+        forge.refresh()
+    except forge.ForgeError:
+        pass
+
+
 @router.post("/projects/{project_id}/loras", status_code=202)
 def train_lora(project_id: str, body: TrainIn):
     project = project_or_404(project_id)

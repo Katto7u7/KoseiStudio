@@ -237,6 +237,8 @@ table.table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .dropzone { display: grid; place-items: center; gap: 6px; padding: 28px; border: 1px dashed var(--line-strong); border-radius: 8px; text-align: center; color: var(--mist); cursor: pointer; }
 .dropzone.over { border-color: var(--real); background: var(--real-soft); }
 
+.sticky-action { position: sticky; bottom: 0; padding: 10px 0 12px; background: linear-gradient(transparent, var(--carbon) 30%); z-index: 3; }
+
 /* Superposiciones */
 .toasts { position: fixed; bottom: 18px; right: 18px; display: grid; gap: 8px; z-index: 60; width: 340px; max-width: calc(100vw - 36px); }
 .toast { background: var(--raised); border: 1px solid var(--line-strong); border-left-width: 3px; border-radius: 6px; padding: 10px 12px; font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.3); }

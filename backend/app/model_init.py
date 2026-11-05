@@ -38,9 +38,15 @@ if os.getenv("DOWNLOAD_FLUX", "0") == "1":
          f"{HF}/lllyasviel/flux1-dev-bnb-nf4/resolve/main/flux1-dev-bnb-nf4-v2.safetensors", False),
     ]
 
+SKIP = ["*.h5", "*.msgpack", "*.ot", "tf_*", "*.bin.index*"]
+TOKENIZER = ["tokenizer*", "vocab*", "merges*", "special_tokens_map*", "*.model", "config.json"]
 HF_SNAPSHOTS = [
-    ("Salesforce/blip-image-captioning-large", True),
-    ("openai/clip-vit-base-patch32", True),
+    ("Salesforce/blip-image-captioning-large", True, {"ignore_patterns": SKIP}),
+    ("openai/clip-vit-base-patch32", True, {"ignore_patterns": SKIP}),
+    # kohya solo necesita los tokenizadores: los pesos vienen dentro del checkpoint.
+    ("openai/clip-vit-large-patch14", True, {"allow_patterns": TOKENIZER}),
+    ("laion/CLIP-ViT-bigG-14-laion2B-39B-b160k", True, {"allow_patterns": TOKENIZER}),
+    ("google/t5-v1_1-xxl", False, {"allow_patterns": TOKENIZER}),
 ]
 
 
@@ -82,16 +88,16 @@ def main() -> int:
 
     os.environ.setdefault("HF_HOME", str(WEIGHTS / "hf"))
     from huggingface_hub import snapshot_download
-    for repo, required in HF_SNAPSHOTS:
+    for repo, required, patterns in HF_SNAPSHOTS:
         try:
-            snapshot_download(repo, local_files_only=True, ignore_patterns=["*.h5", "*.msgpack", "*.ot", "tf_*", "*.bin.index*"])
+            snapshot_download(repo, local_files_only=True, **patterns)
             print(f"ok      {repo}", flush=True)
             continue
         except Exception:
             pass
         print(f"bajando {repo}", flush=True)
         try:
-            snapshot_download(repo, ignore_patterns=["*.h5", "*.msgpack", "*.ot", "tf_*", "*.bin.index*"])
+            snapshot_download(repo, **patterns)
             print(f"listo   {repo}", flush=True)
         except Exception as exc:
             print(f"ERROR   {repo}: {exc}", flush=True)

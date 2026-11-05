@@ -94,11 +94,16 @@ def detect(image_path: Path, cls: dict[str, Any]) -> tuple[list[dict[str, Any]],
     return boxes, source
 
 
-def mask_to_polygon(points: np.ndarray, width: int, height: int, max_points: int = 80) -> Optional[list[float]]:
-    """Simplifica un contorno SAM a un poligono YOLO normalizado."""
-    if points is None or len(points) < 3:
+def mask_to_polygon(mask: np.ndarray, max_points: int = 80) -> Optional[list[float]]:
+    """Contorno exterior mayor de una mascara, como poligono YOLO normalizado."""
+    binary = (np.asarray(mask) > 0.5).astype(np.uint8)
+    height, width = binary.shape[:2]
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
         return None
-    contour = np.asarray(points, dtype=np.float32).reshape(-1, 1, 2)
+    contour = max(contours, key=cv2.contourArea)
+    if cv2.contourArea(contour) < 16:
+        return None
     epsilon = 0.002 * cv2.arcLength(contour, True)
     approx = cv2.approxPolyDP(contour, epsilon, True)
     while len(approx) > max_points:
@@ -125,8 +130,8 @@ def segment(image_path: Path, boxes: list[dict[str, Any]], width: int, height: i
         result = _sam().predict(str(image_path), bboxes=bboxes, device="cpu", verbose=False)[0]
     polygons: list[Optional[list[float]]] = [None] * len(boxes)
     if result.masks is not None:
-        for i, contour in enumerate(result.masks.xy[: len(boxes)]):
-            polygons[i] = mask_to_polygon(contour, width, height)
+        for i, mask in enumerate(result.masks.data.cpu().numpy()[: len(boxes)]):
+            polygons[i] = mask_to_polygon(mask)
     return polygons
 
 

@@ -36,3 +36,8 @@ experiments/runs/
 .env.*
 Thumbs.db
 .DS_Store
+
+# Salidas de pruebas
+scripts/_e2e_build.zip
+scripts/__pycache__/
+backend/_data/

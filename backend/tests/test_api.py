@@ -563,3 +563,14 @@ def test_arch_detection_from_tensors(tmp_path):
     assert arch.checkpoint_arch(make("d.safetensors", ["model.diffusion_model.double_blocks.0.x"])) == "flux"
     assert arch.checkpoint_arch(make("e.safetensors", ["conditioner.embedders.1.model.x"])) == "sdxl"
     assert arch.checkpoint_arch(make("f.safetensors", ["cond_stage_model.transformer.x"])) == "sd15"
+
+
+def test_mask_polygon_uses_largest_contour_without_bridges():
+    import numpy as np
+    mask = np.zeros((100, 100))
+    mask[10:60, 10:60] = 1
+    mask[80:85, 80:85] = 1
+    polygon = labeling.mask_to_polygon(mask)
+    xs, ys = polygon[0::2], polygon[1::2]
+    assert max(xs) < 0.7 and max(ys) < 0.7, "No debe unir la region pequena con una linea"
+    assert labeling.mask_to_polygon(np.zeros((10, 10))) is None

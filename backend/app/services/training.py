@@ -239,7 +239,7 @@ def run_training(ctx: JobContext) -> dict[str, Any]:
                             detail = f"Paso {step} de {total}" + (f", pérdida {loss:.4f}" if loss is not None else "")
                             ctx.progress(step, total, detail)
                     else:
-                        tail = (tail + [line])[-60:]
+                        tail = (tail + [line])[-120:]
                         ctx.log(line)
         code = proc.wait()
     finally:
