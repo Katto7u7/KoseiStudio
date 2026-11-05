@@ -37,7 +37,7 @@ export default function GeneratePage({ projectId }: { projectId: string }) {
   const [sampler, setSampler] = useState("DPM++ 2M");
   const [scheduler, setScheduler] = useState("karras");
   const [batch, setBatch] = useState(1);
-  const [refine, setRefine] = useStored(`kosei_refine_${projectId}`, true);
+  const [refine, setRefine] = useStored(`kosei_refine_${projectId}`, false);
   const [refineDenoise, setRefineDenoise] = useStored(`kosei_refine_d_${projectId}`, 0.4);
   const [selected, setSelected] = useState<ImageRow | null>(null);
   const { busy, run } = useAction();
@@ -136,7 +136,7 @@ export default function GeneratePage({ projectId }: { projectId: string }) {
               </div>
               <label className="row" style={{ fontSize: 13, alignItems: "flex-start", flexWrap: "nowrap" }}>
                 <input type="checkbox" checked={refine} onChange={(e) => setRefine(e.target.checked)} style={{ marginTop: 3 }} />
-                <span>Refinar el sujeto<br /><span className="field-hint">Regenera el rostro o el objeto a resolución completa cuando sale pequeño. Mejora el parecido y duplica el tiempo por imagen.</span></span>
+                <span>Refinar el sujeto<br /><span className="field-hint">Regenera el rostro o el objeto a resolución completa cuando sale pequeño. Cuesta cerca de un tercio más de tiempo, y su mejora medida es leve y no concluyente. Revisa los resultados.</span></span>
               </label>
               {refine && (
                 <Field label={`Fuerza del refinado: ${refineDenoise.toFixed(2)}`}>
