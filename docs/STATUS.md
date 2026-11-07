@@ -15,6 +15,8 @@ Actualizado: 2026-11-05. Rama `entrega-final`. Contexto general y reglas: `../..
 | Importación | 50 fotos por nginx; 1 casi duplicado detectado; partición 20/10/20 bloqueada (huella `7d71f3dd…`) |
 | Etiquetado | YOLO11m COCO + MobileSAM en CPU, 1.6 s/imagen; máscara a partir del contorno mayor |
 | LoRA SDXL | `katto_xl_v1`, 2000 pasos, 69 min, puntos de control a 500, 1000 y 1500 |
+| Memoria y tiempos (6-nov, proyecto Demo) | Entrenamiento SDXL 1024 px: pico 7.6 GB de VRAM y 16.7 GB de RAM en contenedores. SDXL 1024, 30 pasos: 23 s/imagen, pico 9.2 GB de VRAM. SD 1.5 512, 30 pasos: 4.3 s/imagen. RAM en generación: pico 7.7 GB al cambiar de modelo. `katto_xl_v1` (2000 pasos): 4,036 s de ejecución. Almacenamiento: 26.5 GB de imágenes Docker + 37 GB de volúmenes |
+| Con y sin LoRA (6-nov, proyecto Demo) | SDXL, semilla 20261106, 30 pasos, "photograph of ohwxkatto man wearing glasses": parecido 0.15 sin LoRA y 0.64 con `katto_xl_demo`; repetido dos veces con imágenes idénticas. El LoRA (rango 32, 170 MB) modifica 722 módulos, todos en bloques Transformer del U-Net; ‖ΔW‖ máximo en output_blocks 1 y 2 (10.5 y 10.7) |
 | Fidelidad | Fotos reales no vistas 0.57-0.89; personas ajenas 0.06-0.36; LoRA final 0.54; con "ohwxkatto man wearing glasses", 0.51-0.66 |
 | Refinado del sujeto | +0.03 de media en 6 pares; no concluyente. Apagado por defecto |
 | Marca de agua | `dwtDctSvd`: 24 de 24 recuperadas, PSNR 41 dB; sin marca, máximo 59 % de bits |

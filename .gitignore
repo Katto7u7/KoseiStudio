@@ -41,3 +41,7 @@ Thumbs.db
 scripts/_e2e_build.zip
 scripts/__pycache__/
 backend/_data/
+
+# Material de la presentación (no es código)
+*.pptx
+Guion_Presentacion_Camacho.txt
